@@ -1,1 +1,3474 @@
 
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trends</title>
+<meta name="theme-color" content="#0f1417">
+<meta name="description" content="Trend data analyseren, bewerken en visualiseren als controlekaart.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  button, .toggle-switch, .icon-btn-sm, .picker-btn{-webkit-tap-highlight-color:transparent;}
+  :root{
+    --bg:#0f1417;
+    --panel:#161d21;
+    --panel-2:#1c242a;
+    --line:#28323a;
+    --text:#e7edf0;
+    --muted:#8a99a1;
+    --accent:#4fd1c5;
+    --accent-dim:#2f6f6a;
+    --warn:#f0a84f;
+    --danger:#ef5b5b;
+    --good:#6fcf97;
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);height:100%;overflow:hidden;overscroll-behavior:none;}
+  body{
+    display:flex;flex-direction:column;overflow:hidden;
+    position:fixed;inset:0;width:100%;
+  }
+  nav.tabs{
+    flex:0 0 auto;
+    display:flex;gap:2px;padding:6px 8px calc(6px + env(safe-area-inset-bottom));
+    background:#12181c;border-top:1px solid var(--line);
+    max-width:920px;width:100%;margin:0 auto;
+  }
+  nav.tabs button{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    background:none;border:none;color:var(--muted);font-family:var(--sans);font-size:14.5px;
+    font-weight:600;padding:8px 4px;cursor:pointer;border-radius:8px;
+  }
+  nav.tabs button svg{width:24px;height:24px;stroke:var(--muted);fill:none;stroke-width:1.8;}
+  nav.tabs button.active{color:var(--accent);background:#1a2226;}
+  nav.tabs button.active svg{stroke:var(--accent);}
+  nav.tabs button:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible{
+    outline:2px solid var(--accent);outline-offset:2px;
+  }
+
+  main{flex:1 1 auto;min-height:0;overflow-y:auto;max-width:920px;margin:0 auto;padding:0 14px 8px;width:100%;}
+  .view{display:none;padding-top:10px;}
+  .view.active{display:block;}
+
+  .panel{
+    margin-bottom:22px;
+  }
+  .data-sticky-toolbar{
+    position:sticky;
+    top:10px;
+    z-index:5;
+    background:#0f1417;
+  }
+  .panel h2{margin:0 0 12px;font-size:24px;letter-spacing:.02em;color:var(--text);}
+  tr:nth-child(even) td{background:rgba(255,255,255,0.06);}
+  tr.gap-summary-row td{background:rgba(255,255,255,0.03);font-style:italic;}
+  tr.gap-summary-row:active td{background:rgba(79,209,197,0.12);}
+  tr.gap-collapse-row td{background:rgba(255,255,255,0.03);font-style:italic;}
+  tr.gap-collapse-row:active td{background:rgba(79,209,197,0.12);}
+  @keyframes hint-bounce{
+    0%,100%{transform:translateY(0);opacity:0.5;}
+    50%{transform:translateY(4px);opacity:1;}
+  }
+  .accent-title{color:var(--accent);font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em;font-size:18px;}
+  .panel h2.accent-title{color:var(--accent);font-size:18px;}
+  .panel h2 .sub{color:var(--muted);font-weight:500;font-size:18px;}
+  .sub{color:var(--muted);font-weight:500;font-size:16px;font-family:var(--mono);}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .panel-header h2{margin:0;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media (max-width:520px){.grid2{grid-template-columns:1fr;}}
+
+  label{display:block;font-size:17px;color:var(--muted);margin-bottom:6px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em;}
+  input[type=text],input[type=number],input[type=date],select{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:13px 14px;border-radius:8px;font-family:var(--mono);font-size:19px;margin-bottom:12px;
+    height:46px;box-sizing:border-box;
+  }
+  input::placeholder{color:var(--muted);opacity:1;}
+  .picker-btn{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:13px 14px;border-radius:8px;font-family:var(--mono);font-size:19px;margin-bottom:12px;
+    display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;text-align:left;
+  }
+  .picker-btn:hover{border-color:var(--accent);}
+  .field{margin-bottom:0;}
+  .toggle-switch{
+    position:relative;width:50px;height:28px;border-radius:14px;flex:0 0 auto;
+    background:#28333b;border:1px solid var(--line);padding:0;cursor:pointer;
+  }
+  .toggle-switch.active{background:#4f8ff0;border-color:#4f8ff0;}
+  .toggle-switch-knob{
+    position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;
+    background:#fff;transition:left .15s;
+  }
+  .toggle-switch.active .toggle-switch-knob{left:24px;}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+  button.btn{
+    background:var(--accent);color:#08221f;border:none;border-radius:6px;padding:9px 14px;
+    font-family:var(--sans);font-weight:650;font-size:20px;cursor:pointer;padding:12px 18px;
+  }
+  button.btn.compact{padding:11px 18px;font-size:17px;}
+  button.btn.secondary{background:#28333b;color:var(--text);border:1px solid var(--line);}
+  button.btn.warn{background:var(--warn);color:#2a1a02;}
+  button.btn.danger{background:var(--danger);color:#2a0808;}
+  button.btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  .source-list{display:flex;flex-direction:column;gap:6px;}
+  .source-row{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+    cursor:pointer;
+  }
+  .source-row.selected{background:rgba(79,209,197,0.30);border-color:var(--accent);}
+  .source-row .title{font-weight:400;font-size:19px;}
+  .source-row button{
+    background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;
+    width:42px;height:42px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  }
+  .source-row button svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round;}
+  .source-row button:hover{color:var(--text);border-color:var(--accent);}
+
+  .toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px;}
+  .toolbar .field{flex:1;min-width:160px;}
+
+  table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:20px;}
+  #data-table-scroll table{table-layout:fixed;}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:16px;text-transform:uppercase;
+     letter-spacing:.04em;padding:6px 8px;border-bottom:1px solid var(--line);}
+  td{padding:6px 8px;border-bottom:1px solid #1d2529;}
+  tr:hover td{background:#1a2226;}
+  tr.selected td{background:rgba(79,209,197,0.30);}
+  tr.today-row td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
+  tr[aria-hidden] td{border:none;pointer-events:none;}
+  td.val{text-align:right;}
+  #data-table-scroll td{overflow:hidden;text-overflow:ellipsis;}
+  #data-table-scroll td:nth-child(2), #data-table-scroll td:nth-child(3){white-space:nowrap;}
+  td.actions-cell{text-align:right;white-space:nowrap;}
+  td.actions-cell button{
+    background:none;border:none;color:var(--muted);cursor:pointer;padding:6px 8px;
+    display:inline-flex;align-items:center;justify-content:center;
+  }
+  td.actions-cell button svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round;}
+  td.actions-cell button:hover{color:var(--accent);}
+  .empty{color:var(--muted);font-size:19px;padding:20px 0;text-align:center;}
+
+
+  canvas{width:100%;height:220px;display:block;background:var(--panel-2);border-radius:8px;border:1px solid var(--line);}
+
+  .hint{font-size:18px;color:var(--muted);margin-top:6px;}
+  .hint:empty{display:none;margin:0;}
+  .file-link{}
+  .file-link-empty .status{font-size:19px;color:var(--muted);font-family:var(--mono);margin-bottom:10px;}
+  .file-link-empty .actions{display:flex;gap:10px;}
+  .file-link-empty .actions .icon-btn{width:auto;flex:1;padding:13px 10px;}
+  .icon-btn{
+    width:100%;height:auto;padding:13px 16px;
+    display:flex;flex-direction:row;align-items:center;justify-content:center;gap:12px;
+  }
+  .icon-btn .icon-label{font-size:18px;font-weight:600;line-height:1.2;white-space:normal;}
+  .icon-btn svg{width:22px;height:22px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round;}
+
+  .status-dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto;background:var(--muted);}
+  .status-dot.linked{background:var(--good);}
+  .status-dot.error{background:var(--danger);}
+  .file-link-row{display:flex;align-items:center;gap:12px;}
+  .file-link-row .filename{font-family:var(--mono);font-size:19px;color:var(--text);
+    overflow-wrap:break-word;word-break:break-word;}
+  .icon-btn-sm{
+    flex:0 0 auto;width:42px;height:42px;padding:0;border-radius:8px;
+    background:none;border:1px solid var(--line);color:var(--muted);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .icon-btn-sm svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round;}
+  .icon-btn-sm:hover{color:var(--text);border-color:var(--accent);}
+  .icon-btn-sm:disabled{opacity:.4;cursor:not-allowed;}
+  .icon-btn-sm.active:disabled{opacity:1;}
+  .icon-btn-prominent{
+    background:var(--accent);border-color:var(--accent);color:#08221f;
+    width:46px;height:46px;
+  }
+  .icon-btn-prominent svg{width:20px;height:20px;}
+  .icon-btn-prominent:hover{color:#08221f;border-color:var(--accent);opacity:.85;}
+  .icon-btn-prominent:disabled{opacity:.35;}
+  .icon-btn-filled{
+    width:46px;height:46px;background:#28333b;border-color:var(--line);color:var(--text);
+  }
+  .icon-btn-filled:hover{color:var(--text);border-color:var(--accent);background:#28333b;}
+  .icon-btn-filled.active{background:var(--accent);border-color:var(--accent);color:#08221f;}
+  .icon-btn-prominent.active{opacity:.35;}
+  .icon-btn-blue{background:#4f8ff0;border-color:#4f8ff0;color:#eef4ff;}
+  .icon-btn-blue:hover{background:#4f8ff0;border-color:#4f8ff0;color:#eef4ff;opacity:.85;}
+  .icon-btn-blue:disabled{background:#4f8ff0;border-color:#4f8ff0;color:#eef4ff;opacity:.35;}
+
+  .segmented{display:flex;flex-wrap:nowrap;gap:4px;margin-bottom:12px;}
+  .segmented button{
+    flex:1 1 0;padding:8px 2px;font-size:13px;border-radius:7px;min-width:0;
+    border:1px solid var(--line);background:var(--panel-2);color:var(--text);
+    cursor:pointer;font-family:var(--sans);font-weight:600;
+    white-space:nowrap;height:34px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;
+  }
+  .segmented button.active{background:#4f8ff0;color:#eef4ff;border-color:#4f8ff0;}
+  #chart-stats-tabs button:not(.active){background:#28333b;}
+  .segmented button:disabled{opacity:.35;cursor:not-allowed;}
+
+  .auth-banner{display:flex;flex-direction:column;gap:10px;
+    background:#2a2410;border:1px solid #55481a;border-radius:8px;padding:12px;}
+  .auth-banner-text{color:#f0d98a;font-size:17px;line-height:1.4;}
+  .unsupported{
+    background:#2a1f10;border:1px solid #4a3616;color:#f0c98a;border-radius:8px;
+    padding:14px;font-size:19px;
+  }
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;
+    display:flex;justify-content:center;overflow-y:auto;padding:24px;
+    -webkit-overflow-scrolling:touch;
+  }
+  .modal-box{
+    margin:auto;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:20px;max-width:360px;width:100%;
+  }
+  .modal-box p{margin:0 0 16px;font-size:19px;line-height:1.4;color:var(--text);}
+</style>
+</head>
+<body>
+
+<main>
+
+  <div id="unsupported-banner" class="unsupported" style="display:none;margin-bottom:16px;">
+    Deze browser ondersteunt geen rechtstreekse bestandstoegang (File System Access API). Deze app werkt daarom hier niet.
+    Gebruik een recente versie van Chrome, Edge of Opera.
+  </div>
+
+  <!-- METADATA VIEW -->
+  <section id="view-meta" class="view active">
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="accent-title">Werkmap</h2>
+        <div style="display:none;gap:8px;" id="dir-file-buttons">
+          <button class="icon-btn-sm icon-btn-filled" id="btn-refresh-dir" title="Vernieuwen" aria-label="Vernieuwen" style="width:38px;height:38px;">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+          </button>
+          <button class="icon-btn-sm icon-btn-filled" id="btn-unlink-dir" title="Ontkoppelen" aria-label="Ontkoppelen" style="width:38px;height:38px;">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="file-link">
+        <div class="file-link-empty" id="dir-file-empty">
+          <div class="actions">
+            <button class="btn secondary icon-btn" id="btn-open-dir" title="Map kiezen" aria-label="Map kiezen" style="width:100%;">
+              <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              <span class="icon-label">Map kiezen</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="auth-banner" id="dir-file-authneeded" style="display:none;">
+          <div class="auth-banner-text" id="dir-file-status-auth"></div>
+          <button class="btn warn" id="btn-authorize-dir">Toegang autoriseren</button>
+        </div>
+
+        <div class="file-link-row" id="dir-file-linked-row" style="display:none;">
+          <span class="status-dot" id="dir-status-dot"></span>
+          <div class="filename" id="dir-file-name" style="flex:1;min-width:0;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="bron-validation-banner" style="display:none;background:rgba(240,168,79,0.12);border:1px solid var(--warn);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;" id="bron-validation-summary-row">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:var(--warn);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;"><path d="M12 9v4M12 17h.01M10.29 3.86l-8.18 14.18A2 2 0 0 0 3.83 21h16.34a2 2 0 0 0 1.72-3l-8.18-14.14a2 2 0 0 0-3.44 0z"/></svg>
+          <span id="bron-validation-summary-text" style="font-size:17px;color:var(--text);"></span>
+        </div>
+        <svg id="bron-validation-chevron" viewBox="0 0 24 24" style="width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;transition:transform .15s;"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="bron-validation-details" style="display:none;margin-top:10px;font-size:16px;color:var(--muted);"></div>
+    </div>
+
+    <div class="panel" style="margin-top:-8px;">
+      <div class="panel-header">
+        <h2 class="accent-title">Bronnen <span class="sub" id="source-count"></span></h2>
+        <div style="display:flex;gap:8px;">
+          <button class="icon-btn-sm icon-btn-filled" id="btn-move-source-up" title="Naar boven verplaatsen" aria-label="Naar boven verplaatsen" style="width:34px;height:38px;display:none;">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/></svg>
+          </button>
+          <button class="icon-btn-sm icon-btn-filled" id="btn-move-source-down" title="Naar beneden verplaatsen" aria-label="Naar beneden verplaatsen" style="width:34px;height:38px;display:none;">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/></svg>
+          </button>
+          <button class="icon-btn-sm icon-btn-filled" id="btn-toggle-source-search" title="Zoeken" aria-label="Zoeken" style="width:38px;height:38px;">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
+          </button>
+          <button class="icon-btn-sm icon-btn-prominent" id="btn-edit-selected-source" title="Wijzig geselecteerde bron" aria-label="Wijzig geselecteerde bron" style="width:38px;height:38px;display:none;">
+            <svg viewBox="0 0 24 24"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          </button>
+          <button class="icon-btn-sm icon-btn-filled" id="btn-open-new-source" title="Nieuwe bron" aria-label="Nieuwe bron toevoegen" style="width:38px;height:38px;">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="field" id="source-search-wrap" style="margin:0 0 8px;display:none;">
+        <input type="text" id="source-search" placeholder="Zoek op titel…" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:0;padding:10px 12px;height:46px;">
+      </div>
+      <div class="empty" id="source-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
+      <div class="source-list" id="source-list" style="max-height:60vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;"></div>
+      <div class="empty" id="source-empty" style="display:none;">Nog geen bronnen. Koppel eerst een metadatabestand hierboven.</div>
+    </div>
+
+    <div id="source-modal-overlay" class="modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:480px;max-height:85vh;overflow-y:auto;">
+        <h2 id="meta-form-title" class="accent-title" style="margin:0 0 16px;">Nieuwe bron</h2>
+        <div class="grid2">
+          <div class="field"><label>Titel</label><input type="text" id="f-titel" placeholder="bv. Bloeddruk"></div>
+          <div class="field">
+            <label style="display:flex;align-items:center;justify-content:space-between;">
+              Bestandsnaam
+              <span style="display:flex;gap:8px;">
+                <button type="button" class="icon-btn-sm icon-btn-filled" id="btn-new-bestand-name" title="Nieuw bestand" aria-label="Nieuw bestand" style="width:38px;height:38px;">
+                  <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button type="button" class="icon-btn-sm icon-btn-filled" id="btn-pick-bestand" title="Bestand kiezen uit werkmap" aria-label="Bestand kiezen uit werkmap" style="width:38px;height:38px;">
+                  <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                </button>
+              </span>
+            </label>
+            <textarea id="f-bestand" placeholder="bv. Bloeddruk.json" rows="1" readonly style="width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:13px 14px;border-radius:8px;font-family:var(--mono);font-size:19px;margin-bottom:12px;box-sizing:border-box;resize:none;overflow:hidden;word-break:break-word;cursor:pointer;"></textarea>
+          </div>
+          <div class="field"><label>Eenheid</label><input type="text" id="f-eenheid" placeholder="bv. mmHg"></div>
+          <div class="field"><label>Decimalen</label><input type="number" id="f-decimalen" placeholder="1" min="0" max="6" step="1"></div>
+          <div class="field"><label>Min</label><input type="text" inputmode="decimal" id="f-min" placeholder="0"></div>
+          <div class="field"><label>Max</label><input type="text" inputmode="decimal" id="f-max" placeholder="250"></div>
+          <div class="field"><label>Doelwaarde</label><input type="text" inputmode="decimal" id="f-doelx" placeholder="optioneel"></div>
+          <div class="field"><label>Doel-spreiding</label><input type="text" inputmode="decimal" id="f-doelr" placeholder="optioneel"></div>
+        </div>
+        <div class="field" style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
+          <label style="margin:0;">Duizendtal-scheiding</label>
+          <button type="button" class="toggle-switch" id="f-duizendtal" title="Duizendtal-scheiding (standaard uit)" aria-label="Duizendtal-scheiding">
+            <span class="toggle-switch-knob"></span>
+          </button>
+        </div>
+        <div class="field" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+          <label style="margin:0;">Grafiek tonen</label>
+          <button type="button" class="toggle-switch" id="f-toon-grafiek" title="Grafiek tonen (standaard aan)" aria-label="Grafiek tonen">
+            <span class="toggle-switch-knob"></span>
+          </button>
+        </div>
+        <div class="field" style="margin-top:10px;">
+          <label>Alleen lijn als n ></label>
+          <input type="text" inputmode="numeric" id="f-puntjes-drempel" placeholder="optioneel">
+        </div>
+        <div class="field" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+          <label style="margin:0;">Groepering</label>
+          <button type="button" class="picker-btn" id="f-standaard-groepering-btn" style="width:auto;min-width:120px;margin-bottom:0;padding:9px 12px;font-size:17px;">
+            <span id="f-standaard-groepering-label">dag</span>
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+        <div class="field" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+          <label style="margin:0;">Bereik</label>
+          <button type="button" class="picker-btn" id="f-standaard-bereik-btn" style="width:auto;min-width:120px;margin-bottom:0;padding:9px 12px;font-size:17px;">
+            <span id="f-standaard-bereik-label">1 maand</span>
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+        <div class="hint" id="meta-form-hint"></div>
+        <div class="actions" style="flex-wrap:nowrap;margin-top:8px;">
+          <button class="icon-btn-sm icon-btn-filled" id="btn-delete-source" aria-label="Verwijderen" title="Verwijderen" style="display:none;">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </button>
+          <button class="btn secondary compact" id="btn-cancel-edit" style="flex:1;">Annuleren</button>
+          <button class="btn compact" id="btn-save-source" style="flex:1;">Opslaan</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="standaard-bereik-modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:320px;">
+        <h2 class="accent-title" style="margin:0 0 16px;">Bereik</h2>
+        <div class="source-list" id="standaard-bereik-list"></div>
+        <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;margin-top:12px;">
+          <button class="btn secondary compact" id="standaard-bereik-cancel" style="flex:1;">Annuleren</button>
+          <button class="btn compact" id="standaard-bereik-ok" style="flex:1;">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="standaard-groepering-modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:320px;">
+        <h2 class="accent-title" style="margin:0 0 16px;">Groepering</h2>
+        <div class="source-list" id="standaard-groepering-list"></div>
+        <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;margin-top:12px;">
+          <button class="btn secondary compact" id="standaard-groepering-cancel" style="flex:1;">Annuleren</button>
+          <button class="btn compact" id="standaard-groepering-ok" style="flex:1;">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="bestand-picker-modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:420px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 16px;">
+          <h2 class="accent-title" style="margin:0;">Bestand kiezen</h2>
+          <button type="button" class="icon-btn-sm icon-btn-filled" id="btn-toggle-bestand-search" title="Zoeken" aria-label="Zoeken" style="width:38px;height:38px;">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
+          </button>
+        </div>
+        <div class="field" id="bestand-search-wrap" style="margin:0 0 8px;display:none;">
+          <input type="text" id="bestand-search" placeholder="Zoek op bestandsnaam…" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:0;padding:10px 12px;height:46px;">
+        </div>
+        <div class="empty" id="bestand-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bestanden gevonden.</div>
+        <div class="empty" id="bestand-picker-empty" style="display:none;">Geen .json-bestanden gevonden in de werkmap.</div>
+        <div class="source-list" id="bestand-picker-list" style="max-height:50vh;overflow-y:auto;"></div>
+        <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;margin-top:12px;">
+          <button class="btn secondary compact" id="bestand-picker-cancel" style="flex:1;">Annuleren</button>
+          <button class="btn compact" id="bestand-picker-ok" style="flex:1;" disabled>OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="bestand-nieuwe-naam-modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:360px;">
+        <h2 class="accent-title" style="margin:0 0 16px;">Nieuw bestand</h2>
+        <div class="field">
+          <label>Bestandsnaam</label>
+          <input type="text" id="bestand-nieuwe-naam-input" placeholder="bv. Slaap.json">
+        </div>
+        <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;margin-top:12px;">
+          <button class="btn secondary compact" id="bestand-nieuwe-naam-cancel" style="flex:1;">Annuleren</button>
+          <button class="btn compact" id="bestand-nieuwe-naam-save" style="flex:1;">Opslaan</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DATA VIEW -->
+  <section id="view-data" class="view">
+    <div class="data-sticky-toolbar" style="padding:0;">
+      <div style="margin-bottom:2px;">
+        <div class="field" style="flex:1;">
+          <button type="button" class="picker-btn" id="data-source-picker-btn" style="margin-bottom:0;height:46px;">
+            <span id="data-source-picker-label" style="color:var(--accent);">Kies een bron</span>
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <select id="data-source-select" style="display:none;"></select>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;margin-bottom:10px;">
+      <div id="data-chart-preview" style="display:none;">
+        <canvas id="data-chart-canvas" width="880" height="220" style="cursor:pointer;"></canvas>
+      </div>
+    </div>
+
+    <div class="panel" id="data-filters-panel" style="margin-top:0;margin-bottom:4px;display:flex;flex-direction:column;gap:8px;touch-action:pan-y;">
+      <div style="display:flex;align-items:stretch;gap:8px;">
+        <div class="segmented" id="data-agg-filter" style="flex:1;margin-bottom:0;">
+          <button data-agg="d" class="active">dag</button>
+          <button data-agg="w">week</button>
+          <button data-agg="m">1 mnd</button>
+          <button data-agg="q">3 mnd</button>
+          <button data-agg="y">jaar</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:stretch;gap:8px;">
+        <div class="segmented" id="data-period-filter" style="flex:1;margin-bottom:0;">
+          <button data-period="1w">1 w</button>
+          <button data-period="1m" class="active">1 m</button>
+          <button data-period="3m">3 m</button>
+          <button data-period="6m">6 m</button>
+          <button data-period="9m">9 m</button>
+          <button data-period="1y">1 j</button>
+          <button data-period="custom" id="btn-period-custom"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;vertical-align:-3px;">
+            <g id="period-custom-icon-range"><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/></g>
+            <g id="period-custom-icon-all" style="display:none;"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="17" x2="21" y2="17"/></g>
+          </svg></button>
+        </div>
+        <button class="icon-btn-sm icon-btn-prominent" id="btn-edit-selected-datapoint" title="Wijzig geselecteerde meting" aria-label="Wijzig geselecteerde meting" style="width:46px;height:34px;">
+          <svg viewBox="0 0 24 24" style="width:20px;height:20px;"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        </button>
+      </div>
+      <div id="hidden-chart-hint-chevron" style="display:none;justify-content:center;">
+        <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;animation:hint-bounce 1.6s ease-in-out infinite;"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="data-source-picker-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:360px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 16px;">
+          <h2 class="accent-title" style="margin:0;">Kies een bron</h2>
+          <button class="icon-btn-sm icon-btn-filled" id="btn-toggle-picker-search" title="Zoeken" aria-label="Zoeken" style="width:40px;height:40px;">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
+          </button>
+        </div>
+        <div class="field" id="data-source-picker-search-wrap" style="margin:0 0 8px;display:none;">
+          <input type="text" id="data-source-picker-search" placeholder="Zoek op titel…" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:0;padding:10px 12px;height:46px;">
+        </div>
+        <div class="empty" id="data-source-picker-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
+        <div class="source-list" id="data-source-picker-list" style="max-height:50vh;overflow-y:auto;"></div>
+        <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;margin-top:12px;">
+          <button class="btn secondary compact" id="data-source-picker-cancel" style="flex:1;">Annuleren</button>
+          <button class="btn compact" id="data-source-picker-ok" style="flex:1;" disabled>OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="data-range-modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:360px;">
+        <h2 class="accent-title" style="margin:0 0 16px;">Periode</h2>
+          <div class="grid2">
+            <div class="field">
+              <label>Van</label>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <span style="display:flex;align-items:center;">
+                  <span id="data-range-from-todaybar" style="display:none;width:4px;height:16px;background:var(--accent);border-radius:2px;margin-right:6px;"></span>
+                  <span id="data-range-from-day" style="color:var(--text);font-family:var(--mono);font-size:15px;"></span>
+                </span>
+                <span style="display:flex;gap:6px;">
+                  <button type="button" class="icon-btn-sm icon-btn-filled" id="data-range-from-today" title="Vandaag" aria-label="Vandaag" style="width:38px;height:38px;">
+                    <svg viewBox="0 0 24 24" style="width:18px;height:18px;"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><circle cx="12" cy="15" r="1.6" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                  <button type="button" class="icon-btn-sm icon-btn-filled" id="data-range-first" title="Eerste meting" aria-label="Eerste meting" style="width:38px;height:38px;">
+                    <svg viewBox="0 0 24 24" style="width:18px;height:18px;"><line x1="4" y1="5" x2="4" y2="19"/><line x1="20" y1="12" x2="9" y2="12"/><polyline points="13 7 8 12 13 17"/></svg>
+                  </button>
+                </span>
+              </div>
+              <input type="date" id="data-range-from">
+            </div>
+            <div class="field">
+              <label>T/M</label>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <span style="display:flex;align-items:center;">
+                  <span id="data-range-to-todaybar" style="display:none;width:4px;height:16px;background:var(--accent);border-radius:2px;margin-right:6px;"></span>
+                  <span id="data-range-to-day" style="color:var(--text);font-family:var(--mono);font-size:15px;"></span>
+                </span>
+                <span style="display:flex;gap:6px;">
+                  <button type="button" class="icon-btn-sm icon-btn-filled" id="data-range-today" title="Vandaag" aria-label="Vandaag" style="width:38px;height:38px;">
+                    <svg viewBox="0 0 24 24" style="width:18px;height:18px;"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><circle cx="12" cy="15" r="1.6" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                  <button type="button" class="icon-btn-sm icon-btn-filled" id="data-range-last" title="Laatste meting" aria-label="Laatste meting" style="width:38px;height:38px;">
+                    <svg viewBox="0 0 24 24" style="width:18px;height:18px;"><line x1="20" y1="5" x2="20" y2="19"/><line x1="4" y1="12" x2="15" y2="12"/><polyline points="11 7 16 12 11 17"/></svg>
+                  </button>
+                </span>
+              </div>
+              <input type="date" id="data-range-to">
+            </div>
+          </div>
+          <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;margin-top:8px;">
+            <button class="btn secondary compact" id="data-range-cancel" style="flex:1;">Annuleren</button>
+            <button class="btn compact" id="data-range-apply" style="flex:1;">Toepassen</button>
+          </div>
+        </div>
+      </div>
+
+    <div class="modal-overlay" id="chart-stats-modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:340px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 16px;">
+          <h2 class="accent-title" style="margin:0;">Analyse <span class="sub" id="chart-stats-shown-count"></span></h2>
+          <span id="chart-stats-badge" style="display:none;background:#4f8ff0;color:#eef4ff;font-family:var(--mono);font-size:12px;font-weight:600;padding:4px 9px;border-radius:5px;"></span>
+        </div>
+        <div class="segmented" id="chart-stats-tabs" style="margin-bottom:12px;">
+          <button data-stattab="stats" class="active">Statistieken</button>
+          <button data-stattab="chart">Kaart</button>
+        </div>
+        <div style="display:grid;">
+          <table id="chart-stats-table-stats" style="grid-area:1/1;width:100%;font-family:var(--mono);font-size:19px;visibility:visible;">
+            <tbody id="chart-stats-modal-body"></tbody>
+          </table>
+          <table id="chart-stats-table-chart" style="grid-area:1/1;width:100%;font-family:var(--mono);font-size:19px;visibility:hidden;pointer-events:none;">
+            <tbody id="chart-stats-modal-body-chart"></tbody>
+          </table>
+        </div>
+        <div class="actions" style="justify-content:flex-end;margin-top:10px;">
+          <button class="btn compact" id="chart-stats-modal-close" style="flex:1;">Sluiten</button>
+        </div>
+      </div>
+    </div>
+
+      <div class="empty" id="data-empty" style="display:none;padding:6px 0 12px;"></div>
+      <div id="data-table-scroll" style="overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;margin-top:10px;">
+        <table>
+          <colgroup>
+            <col id="data-table-col-1"><col id="data-table-col-2"><col id="data-table-col-3">
+          </colgroup>
+
+          <tbody id="data-table-body"></tbody>
+        </table>
+      </div>
+
+    <div id="datapoint-modal-overlay" class="modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width:400px;">
+        <h2 id="datapoint-modal-title" class="accent-title" style="margin:0 0 16px;">Meting toevoegen</h2>
+        <div class="grid2">
+          <div class="field">
+            <div style="display:flex;align-items:center;margin-bottom:4px;">
+              <span id="f-data-date-todaybar" style="display:none;width:4px;height:16px;background:var(--accent);border-radius:2px;margin-right:6px;"></span>
+              <span id="f-data-date-dayname" style="color:var(--text);font-family:var(--mono);font-size:15px;"></span>
+            </div>
+            <div id="f-data-date-display" style="font-family:var(--mono);font-size:21px;color:var(--text);padding:13px 14px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;"></div>
+          </div>
+          <div class="field">
+            <label style="display:flex;align-items:center;justify-content:space-between;">
+              <span>Waarde<span id="f-data-value-unit" style="color:var(--muted);text-transform:none;font-weight:500;"></span></span>
+              <button type="button" class="icon-btn-sm icon-btn-filled" id="btn-no-measurement" title="Geen meting" aria-label="Geen meting" style="width:38px;height:38px;">
+                <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;stroke-width:3;stroke-linecap:round;"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </label>
+            <input type="text" inputmode="decimal" id="f-data-value">
+          </div>
+        </div>
+        <div class="actions" style="flex-wrap:nowrap;margin-top:8px;">
+          <button class="icon-btn-sm icon-btn-filled" id="btn-delete-datapoint" aria-label="Verwijderen" title="Verwijderen" style="display:none;">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </button>
+          <button class="btn secondary compact" id="btn-cancel-datapoint" style="flex:1;">Annuleren</button>
+          <button class="btn compact" id="btn-add-datapoint" style="flex:1;">Opslaan</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabs">
+  <button data-view="meta" class="active">
+    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2.2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2.2"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="10" cy="18" r="2.2"/></svg>
+    Bronnen
+  </button>
+  <button data-view="data">
+    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><line x1="3.5" y1="9.5" x2="20.5" y2="9.5"/><line x1="3.5" y1="14.5" x2="20.5" y2="14.5"/><line x1="10" y1="4" x2="10" y2="20"/></svg>
+    Data
+  </button>
+</nav>
+
+<div id="confirm-overlay" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <p id="confirm-text"></p>
+    <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;">
+      <button class="btn secondary compact" id="confirm-cancel" style="flex:1;">Annuleren</button>
+      <button class="btn danger compact" id="confirm-ok" style="flex:1;">Verwijderen</button>
+    </div>
+  </div>
+</div>
+
+<div id="alert-overlay" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <p id="alert-text"></p>
+    <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;">
+      <button class="btn compact" id="alert-ok" style="flex:1;">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="warn-overlay" class="modal-overlay" style="display:none;">
+  <div class="modal-box" style="border:1px solid var(--warn);">
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;">
+      <svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:var(--warn);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;"><path d="M12 9v4M12 17h.01M10.29 3.86l-8.18 14.18A2 2 0 0 0 3.83 21h16.34a2 2 0 0 0 1.72-3l-8.18-14.14a2 2 0 0 0-3.44 0z"/></svg>
+      <p id="warn-text" style="margin:0;color:var(--text);"></p>
+    </div>
+    <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;">
+      <button class="btn secondary compact" id="warn-cancel" style="flex:1;">Annuleren</button>
+      <button class="btn compact" id="warn-ok" style="flex:1;background:var(--warn);border-color:var(--warn);">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= IndexedDB: bewaart bestandskoppelingen (FileSystemFileHandle) tussen sessies ================= */
+const DB_NAME = 'controlekaart-db', STORE = 'handles';
+function idbOpen(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(STORE); };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function idbSet(key,val){
+  const db = await idbOpen();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE,'readwrite');
+    tx.objectStore(STORE).put(val,key);
+    tx.oncomplete = ()=>resolve(true);
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function idbGet(key){
+  const db = await idbOpen();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE,'readonly');
+    const req = tx.objectStore(STORE).get(key);
+    req.onsuccess = ()=>resolve(req.result || null);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function idbDelete(key){
+  const db = await idbOpen();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE,'readwrite');
+    tx.objectStore(STORE).delete(key);
+    tx.oncomplete = ()=>resolve(true);
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+
+async function writeHandleJson(handle, obj){
+  const writable = await handle.createWritable();
+  await writable.write(JSON.stringify(obj, null, '\t'));
+  await writable.close();
+}
+async function readHandleJson(handle){
+  const file = await handle.getFile();
+  const text = await file.text();
+  return text.trim() ? JSON.parse(text) : {};
+}
+
+/* Bestanden binnen de gekoppelde werkmap opzoeken/lezen/schrijven.
+   Eenmaal readwrite-toegang tot de map verleend, is geen aparte
+   autorisatie per bestand nodig. */
+async function readJsonFromDir(name){
+  try{
+    const handle = await dirHandle.getFileHandle(name);
+    return await readHandleJson(handle);
+  }catch(e){
+    if(e.name === 'NotFoundError') return null;
+    throw e;
+  }
+}
+async function writeJsonToDir(name, obj){
+  await maybeBackupFile(name);
+  const handle = await dirHandle.getFileHandle(name, {create:true});
+  await writeHandleJson(handle, obj);
+}
+
+function backupFilename(name){
+  const dot = name.lastIndexOf('.');
+  return dot === -1 ? name+'_backup' : name.slice(0,dot)+'_backup'+name.slice(dot);
+}
+
+/* Bij de eerste wijziging van de dag per bestand: huidige inhoud
+   wegschrijven naar <naam>_backup.json vóórdat het echte bestand
+   wordt overschreven. Daarna niet meer, tot de volgende kalenderdag. */
+async function maybeBackupFile(name){
+  const today = dateToKey(new Date());
+  const idbKey = 'backup:'+name;
+  let last = null;
+  try{ last = await idbGet(idbKey); }catch(e){}
+  if(last === today) return;
+  try{
+    const existing = await dirHandle.getFileHandle(name).catch(()=>null);
+    if(existing){
+      const file = await existing.getFile();
+      const text = await file.text();
+      const backupHandle = await dirHandle.getFileHandle(backupFilename(name), {create:true});
+      const writable = await backupHandle.createWritable();
+      await writable.write(text);
+      await writable.close();
+    }
+  }catch(e){
+    console.error('backup mislukt voor', name, e);
+  }
+  try{ await idbSet(idbKey, today); }catch(e){}
+}
+
+/* ================= state ================= */
+let bronnen = [];        // [{id,titel,bestand,eenheid,decimalen,min,max,doel_x,doel_r}]
+let dataCache = {};      // id -> {YYYYMMDD: value}
+let dataFileExists = {}; // id -> bool (bestaat het gegevensbestand al in de werkmap?)
+let dirHandle = null;    // FileSystemDirectoryHandle van de gekoppelde werkmap
+let editingId = null;
+const META_FILENAME = 'trends.json';
+
+const supportsFSA = 'showDirectoryPicker' in window;
+
+/* ================= utils ================= */
+function slugify(s){
+  return (s||'').replace(/\.json$/i,'').trim().replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_-]/g,'');
+}
+function uniqueId(base){
+  let id = slugify(base) || ('bron_' + Date.now());
+  let n = 1;
+  while(bronnen.some(b=>b.id===id && b.id!==editingId)){ id = slugify(base)+'_'+(++n); }
+  return id;
+}
+function keyToDate(k){ return new Date(Date.UTC(+k.slice(0,4), +k.slice(4,6)-1, +k.slice(6,8))); }
+function dateToKey(d){ return d.getUTCFullYear().toString() + String(d.getUTCMonth()+1).padStart(2,'0') + String(d.getUTCDate()).padStart(2,'0'); }
+function fmtDateNL(k){ return k.slice(6,8)+'-'+k.slice(4,6)+'-'+k.slice(0,4); }
+function getISOWeek(date){
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return {week: weekNo, year: d.getUTCFullYear()};
+}
+function fmtGroupLabel(date, mode, k){
+  if(mode === 'w'){
+    const {week, year} = getISOWeek(date);
+    return `${year} Wk${week}`;
+  }
+  if(mode === 'm') return `${String(date.getUTCMonth()+1).padStart(2,'0')}-${date.getUTCFullYear()}`;
+  if(mode === 'q') return `${date.getUTCFullYear()} Q${Math.floor(date.getUTCMonth()/3)+1}`;
+  if(mode === 'y') return `${date.getUTCFullYear()}`;
+  return formatDateCell(k);
+}
+function fmtGroupLabelTable(date, mode, k){
+  return formatDateCell(k); // tabel toont bij groeperen altijd gewoon de datum
+}
+function formatDateCell(k){
+  return fmtDateNL(k);
+}
+let currentFmtThousands = false;
+function fmtVal(v, dec){
+  const s = Number(v).toFixed(dec ?? 1);
+  if(!currentFmtThousands) return s;
+  const negative = s.startsWith('-');
+  const abs = negative ? s.slice(1) : s;
+  const [intPart, decPart] = abs.split('.');
+  const withSep = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (negative?'-':'') + withSep + (decPart!==undefined ? '.'+decPart : '');
+}
+function fmtValPlain(v, dec){ return Number(v).toFixed(dec ?? 1); } // voor invoervelden: nooit duizendtal-komma's (breekt anders Number() bij opslaan)
+function getSource(id){ return bronnen.find(b=>b.id===id); }
+function numOrNull(v){ return v===''||v===null||v===undefined ? null : Number(v); }
+function escapeHtml(s){ return (s??'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function keyToIsoDate(k){ return k.slice(0,4)+'-'+k.slice(4,6)+'-'+k.slice(6,8); }
+function isoToKey(iso){ return iso.replace(/-/g,''); }
+function metaFileObj(){ return { bronnen: bronnen.map(({id, ...rest})=>rest) }; }
+function dataFileObj(data){
+  const o={};
+  Object.keys(data).sort().forEach(k=>{
+    if(typeof data[k] === 'number' && !isNaN(data[k])) o[k]=data[k];
+  });
+  return o;
+}
+
+/* ================= tabs ================= */
+const VIEW_ORDER = ['meta','data'];
+function switchToView(view){
+  const btn = document.querySelector(`nav.tabs button[data-view="${view}"]`);
+  if(!btn) return;
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('view-'+view).classList.add('active');
+  let p;
+  if(view==='data') p = renderDataView();
+  setTimeout(fitVisibleTableScrollBoxes, 0);
+  return p;
+}
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>switchToView(btn.dataset.view));
+});
+
+/* Swipe tussen de hoofdtabs (Bronnen/Data) */
+(function(){
+  const mainEl = document.querySelector('main');
+  let startX=null, startY=null, tracking=false;
+  mainEl.addEventListener('touchstart', (e)=>{
+    if(document.querySelector('.modal-overlay[style*="flex"]')){ tracking=false; return; }
+    if(e.touches.length !== 1){ tracking=false; return; }
+    if(e.target.closest('#data-chart-canvas')){ tracking=false; return; } // canvas heeft eigen swipe (XmR-wissel)
+    if(e.target.closest('#data-filters-panel')){ tracking=false; return; } // paneel heeft eigen swipe (modus-wissel/grafiek tonen-verbergen)
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+  }, {passive:true});
+  mainEl.addEventListener('touchend', (e)=>{
+    if(!tracking || startX===null) return;
+    tracking = false;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const dx = endX - startX;
+    const dy = endY - startY;
+    if(Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const activeBtn = document.querySelector('nav.tabs button.active');
+    const activeView = activeBtn?.dataset.view;
+    const idx = VIEW_ORDER.indexOf(activeView);
+    if(idx === -1) return;
+    if(activeView === 'data'){
+      setDataShowChart(!dataShowChart); // op Data: elke swipe (beide richtingen) toggled de grafiek
+      return;
+    }
+    if(dx < 0 && idx < VIEW_ORDER.length-1){
+      switchToView(VIEW_ORDER[idx+1]); // naar links vegen -> volgende tab
+    } else if(dx > 0 && idx > 0){
+      switchToView(VIEW_ORDER[idx-1]); // naar rechts vegen -> vorige tab
+    }
+  }, {passive:true});
+})();
+
+/* ================= WERKMAP: koppeling ================= */
+async function loadMetaFromDir(){
+  let json;
+  try{
+    json = await readJsonFromDir(META_FILENAME);
+  }catch(e){
+    if(e instanceof SyntaxError){
+      showAlert(`Het metadatabestand (${META_FILENAME}) is beschadigd of onleesbaar en kon niet worden geladen. Er zijn geen bronnen ingelezen. Herstel het bestand (bijv. vanuit een back-up) en koppel de werkmap opnieuw.`);
+    } else {
+      showAlert(`Het metadatabestand (${META_FILENAME}) kon niet worden gelezen: ${e.message}`);
+    }
+    bronnen = [];
+    renderSourceList();
+    renderSourceSelects();
+    return;
+  }
+  const list = json ? (Array.isArray(json) ? json : (json.bronnen || [])) : [];
+  bronnen = list.map(item=>{
+    const id = slugify(item.bestand || item.titel);
+    return {
+      id,
+      titel: item.titel || id,
+      bestand: item.bestand || (id+'.json'),
+      eenheid: item.eenheid || '',
+      decimalen: item.decimalen ?? 1,
+      min: item.min ?? null,
+      max: item.max ?? null,
+      doel_x: item.doel_x ?? null,
+      doel_r: item.doel_r ?? null,
+      standaard_bereik: item.standaard_bereik || '1m',
+      toon_grafiek: item.toon_grafiek !== false,
+      duizendtal: item.duizendtal === true,
+      puntjes_drempel: item.puntjes_drempel ?? null,
+      standaard_groepering: item.standaard_groepering || 'd'
+    };
+  });
+  renderSourceList();
+  renderSourceSelects();
+  validateBronnen();
+}
+async function validateBronnen(){
+  const issues = [];
+  const byBestand = new Map();
+  for(const b of bronnen){
+    if(!byBestand.has(b.bestand)) byBestand.set(b.bestand, []);
+    byBestand.get(b.bestand).push(b);
+  }
+  for(const [bestand, group] of byBestand){
+    if(group.length > 1){
+      group.forEach(b=>issues.push({titel: b.titel, tekst: `Verwijst naar hetzelfde bestand (${bestand}) als een andere bron.`}));
+    }
+  }
+  for(const b of bronnen){
+    try{
+      const handle = await dirHandle.getFileHandle(b.bestand);
+      const file = await handle.getFile();
+      const text = await file.text();
+      if(text.trim().length){
+        JSON.parse(text);
+      }
+    }catch(e){
+      if(e.name === 'NotFoundError'){
+        issues.push({titel: b.titel, tekst: `Bestand ontbreekt (${b.bestand}).`});
+      } else if(e instanceof SyntaxError){
+        issues.push({titel: b.titel, tekst: `Bestand is beschadigd of onleesbaar (${b.bestand}).`});
+      }
+    }
+  }
+  renderBronValidationBanner(issues);
+}
+function renderBronValidationBanner(issues){
+  const banner = document.getElementById('bron-validation-banner');
+  if(!issues.length){
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = 'block';
+  document.getElementById('bron-validation-summary-text').textContent =
+    issues.length === 1 ? '1 bron heeft een probleem' : `${issues.length} bronnen hebben een probleem`;
+  document.getElementById('bron-validation-details').innerHTML = issues.map(i=>
+    `<div style="padding:6px 0;border-top:1px solid var(--line);"><strong style="color:var(--text);">${escapeHtml(i.titel)}</strong><br>${escapeHtml(i.tekst)}</div>`
+  ).join('');
+}
+document.getElementById('bron-validation-summary-row').addEventListener('click', ()=>{
+  const details = document.getElementById('bron-validation-details');
+  const chevron = document.getElementById('bron-validation-chevron');
+  const open = details.style.display !== 'none';
+  details.style.display = open ? 'none' : 'block';
+  chevron.style.transform = open ? '' : 'rotate(180deg)';
+});
+async function syncMetaFile(){
+  if(!dirHandle) return;
+  try{
+    await writeJsonToDir(META_FILENAME, metaFileObj());
+    setFileLinkUI('dir', 'linked', {name: dirHandle.name});
+  }catch(e){
+    console.error('meta schrijven mislukt', e);
+    setFileLinkUI('dir', 'error', {name: dirHandle.name});
+  }
+}
+
+/* state: 'empty' | 'auth' | 'linked' | 'error' */
+function setFileLinkUI(prefix, state, opts){
+  opts = opts || {};
+  document.getElementById(prefix+'-file-empty').style.display = state==='empty' ? 'block' : 'none';
+  document.getElementById(prefix+'-file-authneeded').style.display = state==='auth' ? 'flex' : 'none';
+  document.getElementById(prefix+'-file-linked-row').style.display = (state==='linked'||state==='error') ? 'flex' : 'none';
+  const buttonsEl = document.getElementById(prefix+'-file-buttons');
+  if(buttonsEl) buttonsEl.style.display = (state==='linked'||state==='error') ? 'flex' : 'none';
+  if(state==='auth'){
+    document.getElementById(prefix+'-file-status-auth').textContent = opts.name || '';
+  }
+  if(state==='linked' || state==='error'){
+    document.getElementById(prefix+'-status-dot').className = 'status-dot' + (state==='error' ? ' error' : ' linked');
+    document.getElementById(prefix+'-file-name').textContent = opts.name || '';
+  }
+}
+
+document.getElementById('btn-open-dir').addEventListener('click', async ()=>{
+  try{
+    const handle = await window.showDirectoryPicker({mode:'readwrite'});
+    dirHandle = handle;
+    await idbSet('dir', handle);
+    dataCache = {}; dataFileExists = {};
+    await loadMetaFromDir();
+    setFileLinkUI('dir', 'linked', {name: handle.name});
+  }catch(e){
+    if(e.name!=='AbortError'){
+      console.error('Map kiezen mislukt', e);
+      showAlert('Map kiezen mislukt: '+e.name+' — '+e.message);
+      setFileLinkUI('dir', 'empty');
+    }
+  }
+});
+
+document.getElementById('btn-authorize-dir').addEventListener('click', async ()=>{
+  try{
+    const perm = await dirHandle.requestPermission({mode:'readwrite'});
+    if(perm==='granted'){
+      await loadMetaFromDir();
+      setFileLinkUI('dir', 'linked', {name: dirHandle.name});
+      const lastBronId = await idbGet('lastBron').catch(()=>null);
+      if(lastBronId && bronnen.some(b=>b.id===lastBronId)){
+        document.getElementById('data-source-select').value = lastBronId;
+        updateSourcePickerLabel();
+        dataPeriodFilter = getSource(lastBronId)?.standaard_bereik || '1m';
+        syncPeriodButtonsActive();
+        dataAggMode = getSource(lastBronId)?.standaard_groepering || 'd';
+        document.getElementById('data-agg-filter').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.agg===dataAggMode));
+      }
+      if(bronnen.length) await switchToView('data');
+      const restoredSrc = lastBronId ? getSource(lastBronId) : null;
+      await setDataShowChart(restoredSrc ? restoredSrc.toon_grafiek !== false : dataShowChart);
+    } else {
+      setFileLinkUI('dir', 'auth', {name: dirHandle.name});
+    }
+  }catch(e){ setFileLinkUI('dir', 'auth', {name: dirHandle.name}); }
+});
+
+document.getElementById('btn-refresh-dir').addEventListener('click', async ()=>{
+  if(!dirHandle) return;
+  try{
+    await loadMetaFromDir();
+    dataCache = {}; dataFileExists = {};
+    setFileLinkUI('dir', 'linked', {name: dirHandle.name});
+    await renderDataView();
+    if(dataShowChart) await setDataShowChart(true);
+  }catch(e){ setFileLinkUI('dir', 'error', {name: dirHandle.name}); }
+});
+
+document.getElementById('btn-unlink-dir').addEventListener('click', async ()=>{
+  const ok = await showConfirm('Werkmap ontkoppelen? De bronnenlijst wordt uit de app verwijderd (de bestanden zelf blijven ongewijzigd op je toestel staan).', 'Ontkoppelen');
+  if(!ok) return;
+  dirHandle = null;
+  await idbDelete('dir');
+  bronnen = []; dataCache = {}; dataFileExists = {};
+  renderSourceList(); renderSourceSelects();
+  setFileLinkUI('dir', 'empty');
+});
+
+async function bootDir(){
+  const handle = await idbGet('dir').catch(()=>null);
+  if(!handle){ setFileLinkUI('dir', 'empty'); return; }
+  dirHandle = handle;
+  try{
+    const perm = await handle.queryPermission({mode:'readwrite'});
+    if(perm==='granted'){
+      await loadMetaFromDir();
+      setFileLinkUI('dir', 'linked', {name: handle.name});
+      const lastBronId = await idbGet('lastBron').catch(()=>null);
+      if(lastBronId && bronnen.some(b=>b.id===lastBronId)){
+        document.getElementById('data-source-select').value = lastBronId;
+        updateSourcePickerLabel();
+        dataPeriodFilter = getSource(lastBronId)?.standaard_bereik || '1m';
+        syncPeriodButtonsActive();
+        dataAggMode = getSource(lastBronId)?.standaard_groepering || 'd';
+        document.getElementById('data-agg-filter').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.agg===dataAggMode));
+      }
+      if(bronnen.length) await switchToView('data');
+      const restoredSrc = lastBronId ? getSource(lastBronId) : null;
+      await setDataShowChart(restoredSrc ? restoredSrc.toon_grafiek !== false : dataShowChart);
+    } else {
+      setFileLinkUI('dir', 'auth', {name: handle.name});
+    }
+  }catch(e){ setFileLinkUI('dir', 'empty'); }
+}
+
+/* ================= METADATA: bronnen CRUD ================= */
+function renderMetaView(){
+  document.getElementById('source-count').textContent = bronnen.length ? '('+bronnen.length+')' : '';
+  document.getElementById('source-empty').style.display = bronnen.length ? 'none' : 'block';
+  document.getElementById('meta-form-hint').textContent = dirHandle ? '' : 'Koppel eerst een werkmap voordat je een bron opslaat.';
+  document.getElementById('btn-save-source').disabled = !dirHandle;
+  updateEditSelectedSourceButton();
+}
+
+function renderSourceList(){
+  const list = document.getElementById('source-list');
+  list.innerHTML = '';
+  selectedSourceId = null;
+  updateEditSelectedSourceButton();
+  bronnen.forEach(b=>{
+    const row = document.createElement('div');
+    row.className = 'source-row';
+    row.dataset.id = b.id;
+    row.dataset.titel = b.titel.toLowerCase();
+    row.innerHTML = `<div class="title">${escapeHtml(b.titel)}</div>`;
+    row.addEventListener('click', ()=>{
+      const wasSelected = row.classList.contains('selected');
+      list.querySelectorAll('.source-row.selected').forEach(r=>r.classList.remove('selected'));
+      if(wasSelected){
+        selectedSourceId = null;
+      } else {
+        row.classList.add('selected');
+        selectedSourceId = b.id;
+      }
+      updateEditSelectedSourceButton();
+    });
+    list.appendChild(row);
+  });
+  applySourceSearchFilter();
+  renderMetaView();
+}
+let sourceSearchQuery = '';
+let sourceSearchOpen = false;
+function applySourceSearchFilter(){
+  const q = sourceSearchQuery.trim().toLowerCase();
+  let visibleCount = 0;
+  document.querySelectorAll('#source-list .source-row').forEach(row=>{
+    const match = !q || row.dataset.titel.includes(q);
+    row.style.display = match ? '' : 'none';
+    if(match) visibleCount++;
+  });
+  document.getElementById('source-search-empty').style.display = (q && visibleCount===0) ? 'block' : 'none';
+  updateEditSelectedSourceButton();
+}
+document.getElementById('source-search').addEventListener('input', (e)=>{
+  sourceSearchQuery = e.target.value;
+  applySourceSearchFilter();
+});
+document.getElementById('btn-toggle-source-search').addEventListener('click', ()=>{
+  sourceSearchOpen = !sourceSearchOpen;
+  const btn = document.getElementById('btn-toggle-source-search');
+  const wrap = document.getElementById('source-search-wrap');
+  btn.classList.toggle('icon-btn-blue', sourceSearchOpen);
+  wrap.style.display = sourceSearchOpen ? 'block' : 'none';
+  if(sourceSearchOpen){
+    document.getElementById('source-search').focus();
+  } else {
+    sourceSearchQuery = '';
+    document.getElementById('source-search').value = '';
+    applySourceSearchFilter();
+  }
+  updateEditSelectedSourceButton();
+});
+
+let selectedSourceId = null;
+function updateEditSelectedSourceButton(){
+  const editBtn = document.getElementById('btn-edit-selected-source');
+  const newBtn = document.getElementById('btn-open-new-source');
+  const upBtn = document.getElementById('btn-move-source-up');
+  const downBtn = document.getElementById('btn-move-source-down');
+  const showEdit = !!selectedSourceId;
+  editBtn.style.display = showEdit ? 'flex' : 'none';
+  newBtn.style.display = showEdit ? 'none' : 'flex';
+  newBtn.disabled = !dirHandle || sourceSearchOpen;
+  upBtn.style.display = (showEdit && !sourceSearchOpen) ? 'flex' : 'none';
+  downBtn.style.display = (showEdit && !sourceSearchOpen) ? 'flex' : 'none';
+  if(showEdit && !sourceSearchOpen){
+    const idx = bronnen.findIndex(b=>b.id===selectedSourceId);
+    upBtn.disabled = idx <= 0;
+    downBtn.disabled = idx === -1 || idx >= bronnen.length-1;
+  }
+}
+async function moveSelectedSource(dir){
+  const idx = bronnen.findIndex(b=>b.id===selectedSourceId);
+  const newIdx = idx + dir;
+  if(idx<0 || newIdx<0 || newIdx>=bronnen.length) return;
+  const tmp = bronnen[idx];
+  bronnen[idx] = bronnen[newIdx];
+  bronnen[newIdx] = tmp;
+  await syncMetaFile();
+  const idToKeep = selectedSourceId;
+  renderSourceList();
+  selectedSourceId = idToKeep;
+  const row = document.querySelector(`.source-row[data-id="${selectedSourceId}"]`);
+  if(row) row.classList.add('selected');
+  updateEditSelectedSourceButton();
+}
+document.getElementById('btn-move-source-up').addEventListener('click', ()=>moveSelectedSource(-1));
+document.getElementById('btn-move-source-down').addEventListener('click', ()=>moveSelectedSource(1));
+document.getElementById('btn-edit-selected-source').addEventListener('click', ()=>{
+  if(!selectedSourceId) return;
+  editSource(selectedSourceId);
+});
+
+function openSourceModal(){
+  document.getElementById('source-modal-overlay').style.display = 'flex';
+}
+function closeSourceModal(){
+  document.getElementById('source-modal-overlay').style.display = 'none';
+  resetSourceForm();
+}
+
+document.getElementById('btn-open-new-source').addEventListener('click', ()=>{
+  resetSourceForm();
+  openSourceModal();
+});
+document.getElementById('source-modal-overlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'source-modal-overlay') closeSourceModal();
+});
+
+function editSource(id){
+  const b = getSource(id);
+  if(!b) return;
+  editingId = id;
+  document.getElementById('meta-form-title').textContent = 'Bron bewerken';
+  document.getElementById('f-titel').value = b.titel || '';
+  document.getElementById('f-bestand').value = b.bestand || '';
+  document.getElementById('f-eenheid').value = b.eenheid || '';
+  document.getElementById('f-decimalen').value = b.decimalen ?? 1;
+  document.getElementById('f-min').value = b.min ?? '';
+  document.getElementById('f-max').value = b.max ?? '';
+  document.getElementById('f-doelx').value = b.doel_x ?? '';
+  document.getElementById('f-doelr').value = b.doel_r ?? '';
+  setFormToonGrafiek(b.toon_grafiek !== false);
+  setFormDuizendtal(b.duizendtal === true);
+  document.getElementById('f-puntjes-drempel').value = b.puntjes_drempel ?? '';
+  setFormStandaardGroepering(b.standaard_groepering || 'd');
+  setFormStandaardBereik(b.standaard_bereik || '1m');
+  document.getElementById('btn-delete-source').style.display = 'flex';
+  openSourceModal();
+  requestAnimationFrame(autoResizeBestandField);
+}
+let formToonGrafiek = true;
+function setFormToonGrafiek(show){
+  formToonGrafiek = show;
+  document.getElementById('f-toon-grafiek').classList.toggle('active', show);
+}
+let formDuizendtal = false;
+function setFormDuizendtal(show){
+  formDuizendtal = show;
+  document.getElementById('f-duizendtal').classList.toggle('active', show);
+}
+document.getElementById('f-duizendtal').addEventListener('click', ()=>{
+  setFormDuizendtal(!formDuizendtal);
+});
+document.getElementById('f-toon-grafiek').addEventListener('click', ()=>{
+  setFormToonGrafiek(!formToonGrafiek);
+});
+
+const STANDAARD_BEREIK_OPTIONS = [['1w','1 week'],['1m','1 maand'],['3m','3 maanden'],['6m','6 maanden'],['9m','9 maanden'],['1y','1 jaar'],['all','Alles']];
+let formStandaardBereik = '1m';
+let pickedStandaardBereik = '1m';
+function setFormStandaardBereik(val){
+  formStandaardBereik = val;
+  const opt = STANDAARD_BEREIK_OPTIONS.find(o=>o[0]===val);
+  document.getElementById('f-standaard-bereik-label').textContent = opt ? opt[1] : '1 maand';
+}
+document.getElementById('f-standaard-bereik-btn').addEventListener('click', ()=>{
+  pickedStandaardBereik = formStandaardBereik;
+  const list = document.getElementById('standaard-bereik-list');
+  list.innerHTML = '';
+  STANDAARD_BEREIK_OPTIONS.forEach(([val,label])=>{
+    const row = document.createElement('div');
+    row.className = 'source-row';
+    if(val === pickedStandaardBereik) row.classList.add('selected');
+    row.innerHTML = `<div class="title">${escapeHtml(label)}</div>`;
+    row.addEventListener('click', ()=>{
+      pickedStandaardBereik = val;
+      list.querySelectorAll('.source-row.selected').forEach(r=>r.classList.remove('selected'));
+      row.classList.add('selected');
+    });
+    list.appendChild(row);
+  });
+  document.getElementById('standaard-bereik-modal-overlay').style.display = 'flex';
+});
+document.getElementById('standaard-bereik-cancel').addEventListener('click', ()=>{
+  document.getElementById('standaard-bereik-modal-overlay').style.display = 'none';
+});
+document.getElementById('standaard-bereik-ok').addEventListener('click', ()=>{
+  setFormStandaardBereik(pickedStandaardBereik);
+  document.getElementById('standaard-bereik-modal-overlay').style.display = 'none';
+});
+
+const STANDAARD_GROEPERING_OPTIONS = [['d','dag'],['w','week'],['m','maand'],['q','kwartaal'],['y','jaar']];
+let formStandaardGroepering = 'd';
+let pickedStandaardGroepering = 'd';
+function setFormStandaardGroepering(val){
+  formStandaardGroepering = val;
+  const opt = STANDAARD_GROEPERING_OPTIONS.find(o=>o[0]===val);
+  document.getElementById('f-standaard-groepering-label').textContent = opt ? opt[1] : 'dag';
+}
+document.getElementById('f-standaard-groepering-btn').addEventListener('click', ()=>{
+  pickedStandaardGroepering = formStandaardGroepering;
+  const list = document.getElementById('standaard-groepering-list');
+  list.innerHTML = '';
+  STANDAARD_GROEPERING_OPTIONS.forEach(([val,label])=>{
+    const row = document.createElement('div');
+    row.className = 'source-row';
+    if(val === pickedStandaardGroepering) row.classList.add('selected');
+    row.innerHTML = `<div class="title">${escapeHtml(label)}</div>`;
+    row.addEventListener('click', ()=>{
+      pickedStandaardGroepering = val;
+      list.querySelectorAll('.source-row.selected').forEach(r=>r.classList.remove('selected'));
+      row.classList.add('selected');
+    });
+    list.appendChild(row);
+  });
+  document.getElementById('standaard-groepering-modal-overlay').style.display = 'flex';
+});
+document.getElementById('standaard-groepering-cancel').addEventListener('click', ()=>{
+  document.getElementById('standaard-groepering-modal-overlay').style.display = 'none';
+});
+document.getElementById('standaard-groepering-ok').addEventListener('click', ()=>{
+  setFormStandaardGroepering(pickedStandaardGroepering);
+  document.getElementById('standaard-groepering-modal-overlay').style.display = 'none';
+});
+
+let pickedBestandName = null;
+function addBestandRow(name, selected){
+  const list = document.getElementById('bestand-picker-list');
+  const row = document.createElement('div');
+  row.className = 'source-row';
+  row.dataset.naam = name.toLowerCase();
+  if(selected){ row.classList.add('selected'); pickedBestandName = name; }
+  row.innerHTML = `<div class="title">${escapeHtml(name)}</div>`;
+  row.addEventListener('click', ()=>{
+    list.querySelectorAll('.source-row.selected').forEach(r=>r.classList.remove('selected'));
+    row.classList.add('selected');
+    pickedBestandName = name;
+    document.getElementById('bestand-picker-ok').disabled = false;
+  });
+  list.appendChild(row);
+  return row;
+}
+async function openBestandPicker(){
+  if(!dirHandle){ showAlert('Koppel eerst een werkmap (zie boven op dit tabblad).'); return; }
+  bestandSearchQuery = '';
+  bestandSearchOpen = false;
+  document.getElementById('bestand-search').value = '';
+  document.getElementById('bestand-search-wrap').style.display = 'none';
+  document.getElementById('bestand-search-empty').style.display = 'none';
+  document.getElementById('btn-toggle-bestand-search').classList.remove('icon-btn-blue');
+  const list = document.getElementById('bestand-picker-list');
+  const emptyEl = document.getElementById('bestand-picker-empty');
+  const okBtn = document.getElementById('bestand-picker-ok');
+  list.innerHTML = '';
+  pickedBestandName = null;
+  let names = [];
+  try{
+    for await (const [name, handle] of dirHandle.entries()){
+      if(handle.kind === 'file' && name.toLowerCase().endsWith('.json')) names.push(name);
+    }
+  }catch(e){ showAlert('Kon de werkmap niet lezen: '+e.message); return; }
+  names.sort((a,b)=>a.localeCompare(b));
+  emptyEl.style.display = names.length ? 'none' : 'block';
+  const currentVal = document.getElementById('f-bestand').value.trim();
+  names.forEach(name=>addBestandRow(name, name === currentVal));
+  okBtn.disabled = !pickedBestandName;
+  document.getElementById('bestand-picker-modal-overlay').style.display = 'flex';
+}
+function closeBestandPicker(){
+  document.getElementById('bestand-picker-modal-overlay').style.display = 'none';
+}
+let bestandSearchQuery = '';
+let bestandSearchOpen = false;
+function applyBestandSearchFilter(){
+  const q = bestandSearchQuery.trim().toLowerCase();
+  let visibleCount = 0;
+  document.querySelectorAll('#bestand-picker-list .source-row').forEach(row=>{
+    const match = !q || row.dataset.naam.includes(q);
+    row.style.display = match ? '' : 'none';
+    if(match) visibleCount++;
+  });
+  document.getElementById('bestand-search-empty').style.display = (q && visibleCount===0) ? 'block' : 'none';
+}
+document.getElementById('bestand-search').addEventListener('input', (e)=>{
+  bestandSearchQuery = e.target.value;
+  applyBestandSearchFilter();
+});
+document.getElementById('btn-toggle-bestand-search').addEventListener('click', ()=>{
+  bestandSearchOpen = !bestandSearchOpen;
+  const btn = document.getElementById('btn-toggle-bestand-search');
+  const wrap = document.getElementById('bestand-search-wrap');
+  btn.classList.toggle('icon-btn-blue', bestandSearchOpen);
+  wrap.style.display = bestandSearchOpen ? 'block' : 'none';
+  if(bestandSearchOpen){
+    document.getElementById('bestand-search').focus();
+  } else {
+    bestandSearchQuery = '';
+    document.getElementById('bestand-search').value = '';
+    applyBestandSearchFilter();
+  }
+});
+document.getElementById('btn-pick-bestand').addEventListener('click', openBestandPicker);
+document.getElementById('f-bestand').addEventListener('click', openBestandPicker);
+document.getElementById('bestand-picker-cancel').addEventListener('click', closeBestandPicker);
+document.getElementById('bestand-picker-ok').addEventListener('click', ()=>{
+  if(!pickedBestandName) return;
+  document.getElementById('f-bestand').value = pickedBestandName;
+  autoResizeBestandField();
+  closeBestandPicker();
+});
+
+document.getElementById('btn-new-bestand-name').addEventListener('click', ()=>{
+  document.getElementById('bestand-nieuwe-naam-input').value = '';
+  document.getElementById('bestand-nieuwe-naam-modal-overlay').style.display = 'flex';
+});
+document.getElementById('bestand-nieuwe-naam-cancel').addEventListener('click', ()=>{
+  document.getElementById('bestand-nieuwe-naam-modal-overlay').style.display = 'none';
+});
+document.getElementById('bestand-nieuwe-naam-save').addEventListener('click', ()=>{
+  let name = document.getElementById('bestand-nieuwe-naam-input').value.trim();
+  if(!name){ showAlert('Vul eerst een bestandsnaam in.'); return; }
+  if(!name.toLowerCase().endsWith('.json')) name += '.json';
+  document.getElementById('f-bestand').value = name;
+  autoResizeBestandField();
+  document.getElementById('bestand-nieuwe-naam-modal-overlay').style.display = 'none';
+});
+function autoResizeBestandField(){
+  const el = document.getElementById('f-bestand');
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+document.getElementById('f-bestand').addEventListener('input', autoResizeBestandField);
+function resetSourceForm(){
+  editingId = null;
+  document.getElementById('meta-form-title').textContent = 'Nieuwe bron';
+  ['f-titel','f-bestand','f-eenheid','f-min','f-max','f-doelx','f-doelr','f-decimalen','f-puntjes-drempel'].forEach(id=>document.getElementById(id).value='');
+  autoResizeBestandField();
+  setFormToonGrafiek(true);
+  setFormDuizendtal(false);
+  setFormStandaardGroepering('d');
+  setFormStandaardBereik('1m');
+  document.getElementById('btn-delete-source').style.display = 'none';
+}
+document.getElementById('btn-cancel-edit').addEventListener('click', closeSourceModal);
+document.getElementById('btn-delete-source').addEventListener('click', async ()=>{
+  if(!editingId) return;
+  await deleteSource(editingId);
+  closeSourceModal();
+});
+
+document.getElementById('btn-save-source').addEventListener('click', async ()=>{
+  if(!dirHandle){ showAlert('Koppel eerst een werkmap.'); return; }
+  const titel = document.getElementById('f-titel').value.trim();
+  if(!titel){ showAlert('Titel is verplicht.'); return; }
+  const bestandRaw = document.getElementById('f-bestand').value.trim() || titel + '.json';
+  const id = editingId || uniqueId(bestandRaw);
+  const src = {
+    id, titel, bestand: bestandRaw,
+    eenheid: document.getElementById('f-eenheid').value.trim(),
+    decimalen: parseInt(document.getElementById('f-decimalen').value || '1', 10),
+    min: numOrNull(document.getElementById('f-min').value),
+    max: numOrNull(document.getElementById('f-max').value),
+    doel_x: numOrNull(document.getElementById('f-doelx').value),
+    doel_r: numOrNull(document.getElementById('f-doelr').value),
+    standaard_bereik: formStandaardBereik,
+    toon_grafiek: formToonGrafiek,
+    duizendtal: formDuizendtal,
+    puntjes_drempel: numOrNull(document.getElementById('f-puntjes-drempel').value.trim()),
+    standaard_groepering: formStandaardGroepering
+  };
+  const idx = bronnen.findIndex(b=>b.id===id);
+  if(idx>=0) bronnen[idx] = src; else bronnen.push(src);
+  await syncMetaFile();
+  closeSourceModal();
+  renderSourceList();
+  renderSourceSelects();
+  if(document.getElementById('data-source-select').value === id){
+    dataPeriodFilter = src.standaard_bereik || '1m';
+    syncPeriodButtonsActive();
+    dataAggMode = src.standaard_groepering || 'd';
+    document.getElementById('data-agg-filter').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.agg===dataAggMode));
+    updateDataAggButtonStates();
+    setDataShowChart(src.toon_grafiek !== false);
+    renderDataView();
+  }
+});
+
+function showConfirm(message, okLabel){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('confirm-overlay');
+    document.getElementById('confirm-text').textContent = message;
+    const cancelBtn = document.getElementById('confirm-cancel');
+    const okBtn = document.getElementById('confirm-ok');
+    okBtn.textContent = okLabel || 'Verwijderen';
+    overlay.style.display = 'flex';
+    function cleanup(result){
+      overlay.style.display = 'none';
+      cancelBtn.removeEventListener('click', onCancel);
+      okBtn.removeEventListener('click', onOk);
+      overlay.removeEventListener('click', onOverlay);
+      resolve(result);
+    }
+    function onCancel(){ cleanup(false); }
+    function onOk(){ cleanup(true); }
+    function onOverlay(e){ if(e.target===overlay) cleanup(false); }
+    cancelBtn.addEventListener('click', onCancel);
+    okBtn.addEventListener('click', onOk);
+    overlay.addEventListener('click', onOverlay);
+  });
+}
+
+function showWarningConfirm(message, okLabel){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('warn-overlay');
+    document.getElementById('warn-text').textContent = message;
+    const cancelBtn = document.getElementById('warn-cancel');
+    const okBtn = document.getElementById('warn-ok');
+    okBtn.textContent = okLabel || 'OK';
+    cancelBtn.style.display = okLabel ? 'flex' : 'none';
+    overlay.style.display = 'flex';
+    function cleanup(result){
+      overlay.style.display = 'none';
+      cancelBtn.removeEventListener('click', onCancel);
+      okBtn.removeEventListener('click', onOk);
+      overlay.removeEventListener('click', onOverlay);
+      resolve(result);
+    }
+    function onCancel(){ cleanup(false); }
+    function onOk(){ cleanup(true); }
+    function onOverlay(e){ if(e.target===overlay) cleanup(false); }
+    cancelBtn.addEventListener('click', onCancel);
+    okBtn.addEventListener('click', onOk);
+    overlay.addEventListener('click', onOverlay);
+  });
+}
+
+function showAlert(message){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('alert-overlay');
+    document.getElementById('alert-text').textContent = message;
+    const okBtn = document.getElementById('alert-ok');
+    overlay.style.display = 'flex';
+    function cleanup(){
+      overlay.style.display = 'none';
+      okBtn.removeEventListener('click', onOk);
+      overlay.removeEventListener('click', onOverlay);
+      resolve();
+    }
+    function onOk(){ cleanup(); }
+    function onOverlay(e){ if(e.target===overlay) cleanup(); }
+    okBtn.addEventListener('click', onOk);
+    overlay.addEventListener('click', onOverlay);
+  });
+}
+
+async function deleteSource(id){
+  const b = getSource(id);
+  if(!b) return;
+  const ok = await showConfirm(`Bron "${b.titel}" verwijderen uit de metadata? Het gegevensbestand (${b.bestand}) blijft ongewijzigd in de werkmap staan.`);
+  if(!ok) return;
+  bronnen = bronnen.filter(x=>x.id!==id);
+  await syncMetaFile();
+  delete dataCache[id];
+  delete dataFileExists[id];
+  renderSourceList();
+  renderSourceSelects();
+}
+
+/* ================= DATA VIEW: gegevensbestand per bron (automatisch via werkmap) ================= */
+function renderSourceSelects(){
+  ['data-source-select'].forEach(selId=>{
+    const sel = document.getElementById(selId);
+    const prev = sel.value;
+    sel.innerHTML = bronnen.map(b=>`<option value="${b.id}">${escapeHtml(b.titel)}</option>`).join('');
+    if(bronnen.some(b=>b.id===prev)) sel.value = prev;
+  });
+  updateSourcePickerLabel();
+}
+
+function updateSourcePickerLabel(){
+  const sel = document.getElementById('data-source-select');
+  const src = getSource(sel.value);
+  document.getElementById('data-source-picker-label').textContent = src ? `${src.titel}${src.eenheid ? ' ('+src.eenheid+')' : ''}` : 'Kies een bron';
+}
+
+let pickedSourceId = null;
+function openSourcePicker(){
+  const sel = document.getElementById('data-source-select');
+  const list = document.getElementById('data-source-picker-list');
+  const okBtn = document.getElementById('data-source-picker-ok');
+  const searchEl = document.getElementById('data-source-picker-search');
+  list.innerHTML = '';
+  searchEl.value = '';
+  document.getElementById('data-source-picker-search-wrap').style.display = 'none';
+  document.getElementById('data-source-picker-search-empty').style.display = 'none';
+  document.getElementById('btn-toggle-picker-search').classList.remove('icon-btn-blue');
+  pickedSourceId = bronnen.some(b=>b.id===sel.value) ? sel.value : null;
+  okBtn.disabled = !pickedSourceId;
+  bronnen.forEach(b=>{
+    const row = document.createElement('div');
+    row.className = 'source-row';
+    row.dataset.titel = b.titel.toLowerCase();
+    if(b.id === pickedSourceId) row.classList.add('selected');
+    row.innerHTML = `<div class="title">${escapeHtml(b.titel)}</div>`;
+    row.addEventListener('click', ()=>{
+      list.querySelectorAll('.source-row.selected').forEach(r=>r.classList.remove('selected'));
+      row.classList.add('selected');
+      pickedSourceId = b.id;
+      okBtn.disabled = false;
+    });
+    list.appendChild(row);
+  });
+  document.getElementById('data-source-picker-overlay').style.display = 'flex';
+}
+document.getElementById('data-source-picker-search').addEventListener('input', (e)=>{
+  const q = e.target.value.trim().toLowerCase();
+  let visibleCount = 0;
+  document.querySelectorAll('#data-source-picker-list .source-row').forEach(row=>{
+    const match = !q || row.dataset.titel.includes(q);
+    row.style.display = match ? '' : 'none';
+    if(match) visibleCount++;
+  });
+  document.getElementById('data-source-picker-search-empty').style.display = (q && visibleCount===0) ? 'block' : 'none';
+});
+document.getElementById('btn-toggle-picker-search').addEventListener('click', ()=>{
+  const btn = document.getElementById('btn-toggle-picker-search');
+  const wrap = document.getElementById('data-source-picker-search-wrap');
+  const isOpen = wrap.style.display !== 'none';
+  btn.classList.toggle('icon-btn-blue', !isOpen);
+  wrap.style.display = isOpen ? 'none' : 'block';
+  if(!isOpen){
+    document.getElementById('data-source-picker-search').focus();
+  } else {
+    const searchEl = document.getElementById('data-source-picker-search');
+    searchEl.value = '';
+    searchEl.dispatchEvent(new Event('input'));
+  }
+});
+function closeSourcePicker(){
+  document.getElementById('data-source-picker-overlay').style.display = 'none';
+}
+document.getElementById('data-source-picker-btn').addEventListener('click', openSourcePicker);
+document.getElementById('data-source-picker-cancel').addEventListener('click', closeSourcePicker);
+document.getElementById('data-source-picker-ok').addEventListener('click', ()=>{
+  if(!pickedSourceId) return;
+  const sel = document.getElementById('data-source-select');
+  sel.value = pickedSourceId;
+  sel.dispatchEvent(new Event('change'));
+  updateSourcePickerLabel();
+  closeSourcePicker();
+});
+document.getElementById('data-source-picker-overlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'data-source-picker-overlay') closeSourcePicker();
+});
+
+async function ensureDataLoaded(id){
+  if(dataCache[id] !== undefined) return; // al eerder deze sessie geladen
+  const src = getSource(id);
+  if(!src || !dirHandle){ return; }
+  try{
+    const json = await readJsonFromDir(src.bestand);
+    dataCache[id] = json ? dataFileObj(json) : {};
+    dataFileExists[id] = !!json;
+  }catch(e){ console.error('data lezen mislukt', e); dataCache[id] = {}; }
+}
+
+document.getElementById('data-source-select').addEventListener('change', async ()=>{
+  const newId = document.getElementById('data-source-select').value;
+  idbSet('lastBron', newId).catch(()=>{});
+  const newSrc = getSource(newId);
+  dataPeriodFilter = newSrc?.standaard_bereik || '1m';
+  syncPeriodButtonsActive();
+  dataAggMode = newSrc?.standaard_groepering || 'd';
+  document.getElementById('data-agg-filter').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.agg===dataAggMode));
+  updateDataAggButtonStates();
+  chartViewMode = 'standard';
+  setDataShowChart(newSrc?.toon_grafiek !== false);
+  renderDataView();
+});
+
+let dataPeriodFilter = '1m';
+let dataAggMode = 'd';
+document.getElementById('data-agg-filter').querySelectorAll('button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    dataAggMode = btn.dataset.agg;
+    document.getElementById('data-agg-filter').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b===btn));
+    renderDataView();
+  });
+});
+
+let dataShowChart = true;
+async function setDataShowChart(show){
+  dataShowChart = show;
+  document.getElementById('data-chart-preview').style.display = show ? 'block' : 'none';
+  if(show) await renderDataChartPreview();
+  requestAnimationFrame(()=>requestAnimationFrame(fitVisibleTableScrollBoxes));
+  updateHiddenChartHint();
+}
+
+function updateHiddenChartHint(){
+  const show = !dataShowChart;
+  document.getElementById('hidden-chart-hint-chevron').style.display = show ? 'flex' : 'none';
+}
+
+let chartViewMode = 'standard'; // 'standard' of 'xmr' — swipe op de kaart wisselt (alleen bij dag-groepering)
+let expandedGapRuns = new Set(); // welke samengevouwen hiaat-reeksen (op run-id) zijn opengeklapt
+
+const DATA_PERIOD_DAYS = {'1w':7,'1m':31,'3m':91,'6m':182,'9m':273,'1y':365,'5y':1826,'all':null};
+function setDataPeriod(period){
+  const group = document.getElementById('data-period-filter');
+  if(period === 'custom'){
+    openDataRangeModal();
+    return;
+  }
+  dataPeriodFilter = period;
+  group.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.period===period));
+  updatePeriodCustomIcon();
+  updateDataAggButtonStates();
+  renderDataView();
+}
+document.getElementById('data-period-filter').querySelectorAll('button').forEach(btn=>{
+  btn.addEventListener('click', ()=>setDataPeriod(btn.dataset.period));
+});
+
+function updatePeriodCustomIcon(){
+  const rangeIcon = document.getElementById('period-custom-icon-range');
+  const allIcon = document.getElementById('period-custom-icon-all');
+  if(!rangeIcon) return;
+  let isAll = dataPeriodFilter === 'all';
+  if(!isAll && dataPeriodFilter === 'custom'){
+    const id = document.getElementById('data-source-select').value;
+    const range = id ? getDateRange(id) : null;
+    if(range){
+      const fromIso = document.getElementById('data-range-from').value;
+      const toIso = document.getElementById('data-range-to').value;
+      const fromKey = fromIso ? isoToKey(fromIso) : null;
+      const toKey = toIso ? isoToKey(toIso) : null;
+      const isToOk = toKey === range.last || toKey === dateToKey(todayUTCDate());
+      if(fromKey === range.first && isToOk) isAll = true;
+    }
+  }
+  rangeIcon.style.display = isAll ? 'none' : '';
+  allIcon.style.display = isAll ? '' : 'none';
+}
+function syncPeriodButtonsActive(){
+  const group = document.getElementById('data-period-filter');
+  let matchedStandardPeriod = null;
+  if(dataPeriodFilter === 'custom'){
+    const fromIso = document.getElementById('data-range-from').value;
+    const toIso = document.getElementById('data-range-to').value;
+    const fromKey = fromIso ? isoToKey(fromIso) : null;
+    const toKey = toIso ? isoToKey(toIso) : null;
+    const todayKey = dateToKey(todayUTCDate());
+    if(fromKey && toKey === todayKey){
+      for(const p of ['1w','1m','3m','6m','9m','1y']){
+        const days = DATA_PERIOD_DAYS[p];
+        const cutoff = new Date(todayUTCDate()); cutoff.setUTCDate(cutoff.getUTCDate()-(days-1));
+        if(fromKey === dateToKey(cutoff)){ matchedStandardPeriod = p; break; }
+      }
+    }
+  }
+  group.querySelectorAll('button').forEach(b=>{
+    const match = b.dataset.period===dataPeriodFilter || (dataPeriodFilter==='all' && b.dataset.period==='custom') || (matchedStandardPeriod && b.dataset.period===matchedStandardPeriod);
+    b.classList.toggle('active', match);
+  });
+  updatePeriodCustomIcon();
+}
+const AGG_DAYS = {d:1, w:7, m:30, q:91, y:365};
+function getDataPeriodDaysForFilter(){
+  if(dataPeriodFilter==='custom'){
+    const fromIso = document.getElementById('data-range-from').value;
+    const toIso = document.getElementById('data-range-to').value;
+    if(!fromIso || !toIso) return null;
+    const oneDayMs = 24*60*60*1000;
+    return (keyToDate(isoToKey(toIso)) - keyToDate(isoToKey(fromIso))) / oneDayMs;
+  }
+  return DATA_PERIOD_DAYS[dataPeriodFilter];
+}
+function updateDataAggButtonStates(){
+  const periodDays = getDataPeriodDaysForFilter();
+  const buttons = document.getElementById('data-agg-filter').querySelectorAll('button');
+  buttons.forEach(btn=>{
+    const agg = btn.dataset.agg;
+    const disable = agg!=='d' && periodDays!=null && periodDays < AGG_DAYS[agg];
+    btn.disabled = disable;
+  });
+  const activeBtn = document.getElementById('data-agg-filter').querySelector('button.active');
+  if(activeBtn && activeBtn.disabled){
+    dataAggMode = 'd';
+    buttons.forEach(b=>b.classList.toggle('active', b.dataset.agg==='d'));
+  }
+}
+
+function getDateRange(id){
+  const keys = Object.keys(dataCache[id] || {}).sort();
+  if(!keys.length) return null;
+  return {first: keys[0], last: keys[keys.length-1]};
+}
+
+function firstOfMonthIso(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+}
+function todayIso(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function updateRangeButtonStates(){
+  const id = document.getElementById('data-source-select').value;
+  const range = getDateRange(id);
+  const fromEl = document.getElementById('data-range-from');
+  const toEl = document.getElementById('data-range-to');
+  const firstBtn = document.getElementById('data-range-first');
+  const lastBtn = document.getElementById('data-range-last');
+  document.getElementById('data-range-from-day').textContent = fromEl.value ? getDayAbbrev(isoToKey(fromEl.value)) : '';
+  document.getElementById('data-range-to-day').textContent = toEl.value ? getDayAbbrev(isoToKey(toEl.value)) : '';
+  document.getElementById('data-range-from-todaybar').style.display = (fromEl.value === todayIso()) ? 'inline-block' : 'none';
+  document.getElementById('data-range-to-todaybar').style.display = (toEl.value === todayIso()) ? 'inline-block' : 'none';
+  const fromTodayBtn = document.getElementById('data-range-from-today');
+  const toTodayBtn = document.getElementById('data-range-today');
+  const todayIsoVal = todayIso();
+  fromTodayBtn.disabled = fromEl.value === todayIsoVal;
+  toTodayBtn.disabled = toEl.value === todayIsoVal;
+  fromTodayBtn.classList.toggle('active', fromTodayBtn.disabled);
+  toTodayBtn.classList.toggle('active', toTodayBtn.disabled);
+  if(!range){
+    firstBtn.disabled = true; lastBtn.disabled = true;
+    firstBtn.classList.remove('active'); lastBtn.classList.remove('active');
+    return;
+  }
+  firstBtn.disabled = fromEl.value === keyToIsoDate(range.first);
+  lastBtn.disabled = toEl.value === keyToIsoDate(range.last);
+  firstBtn.classList.toggle('active', firstBtn.disabled);
+  lastBtn.classList.toggle('active', lastBtn.disabled);
+}
+function openDataRangeModal(){
+  const id = document.getElementById('data-source-select').value;
+  const keys = Object.keys(dataCache[id] || {}).sort();
+  const shown = getShownDataKeys(keys).slice().sort();
+  const fromEl = document.getElementById('data-range-from');
+  const toEl = document.getElementById('data-range-to');
+  if(shown.length){
+    fromEl.value = keyToIsoDate(shown[0]);
+    toEl.value = keyToIsoDate(shown[shown.length-1]);
+  } else {
+    fromEl.value = firstOfMonthIso();
+    toEl.value = todayIso();
+  }
+  updateRangeButtonStates();
+  document.getElementById('data-range-modal-overlay').style.display = 'flex';
+}
+function closeDataRangeModal(){
+  document.getElementById('data-range-modal-overlay').style.display = 'none';
+}
+document.getElementById('data-range-cancel').addEventListener('click', closeDataRangeModal);
+document.getElementById('data-range-modal-overlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'data-range-modal-overlay') closeDataRangeModal();
+});
+document.getElementById('data-range-from').addEventListener('input', updateRangeButtonStates);
+document.getElementById('data-range-to').addEventListener('input', updateRangeButtonStates);
+document.getElementById('data-range-first').addEventListener('click', ()=>{
+  const id = document.getElementById('data-source-select').value;
+  const range = getDateRange(id);
+  if(range) document.getElementById('data-range-from').value = keyToIsoDate(range.first);
+  updateRangeButtonStates();
+});
+document.getElementById('data-range-today').addEventListener('click', ()=>{
+  document.getElementById('data-range-to').value = todayIso();
+  updateRangeButtonStates();
+});
+document.getElementById('data-range-from-today').addEventListener('click', ()=>{
+  document.getElementById('data-range-from').value = todayIso();
+  updateRangeButtonStates();
+});
+document.getElementById('data-range-last').addEventListener('click', ()=>{
+  const id = document.getElementById('data-source-select').value;
+  const range = getDateRange(id);
+  if(range) document.getElementById('data-range-to').value = keyToIsoDate(range.last);
+  updateRangeButtonStates();
+});
+document.getElementById('data-range-apply').addEventListener('click', async ()=>{
+  const id = document.getElementById('data-source-select').value;
+  const fromIso = document.getElementById('data-range-from').value;
+  const toIso = document.getElementById('data-range-to').value;
+  const fromKey = fromIso ? isoToKey(fromIso) : null;
+  const toKey = toIso ? isoToKey(toIso) : null;
+  const range = getDateRange(id);
+  if(range){
+    let warnMsg = null;
+    if(toKey && toKey < range.first){
+      warnMsg = `Dit bereik ligt geheel vóór de eerste meting (${fmtDateNL(range.first)}).`;
+    } else if(fromKey && fromKey > range.last){
+      warnMsg = `Dit bereik ligt geheel na de laatste meting (${fmtDateNL(range.last)}).`;
+    }
+    if(warnMsg){
+      const proceed = await showWarningConfirm(warnMsg, 'OK');
+      if(!proceed) return;
+    }
+  }
+  dataPeriodFilter = 'custom';
+  syncPeriodButtonsActive();
+  closeDataRangeModal();
+  updateDataAggButtonStates();
+  renderDataView();
+});
+
+function computeMeanSigma(vals){
+  const n = vals.length;
+  if(n===0) return {mean:null, sigma:null};
+  if(n===1) return {mean:vals[0], sigma:0};
+  const mean = vals.reduce((s,v)=>s+v,0)/n;
+  const variance = vals.reduce((s,v)=>s+Math.pow(v-mean,2),0)/(n-1);
+  return {mean, sigma:Math.sqrt(variance)};
+}
+function computeRBar(valsAsc){
+  if(valsAsc.length<2) return null;
+  let sum=0;
+  for(let i=1;i<valsAsc.length;i++) sum+=Math.abs(valsAsc[i]-valsAsc[i-1]);
+  return sum/(valsAsc.length-1);
+}
+function classifyValueColor(v, mean, sigma, rBar, mode){
+  if(mean===null) return 'var(--text)';
+  if(mode === 'xmr' && rBar!=null && rBar>0){
+    const dist = Math.abs(v-mean);
+    if(dist > 2.66*rBar) return 'var(--danger)';
+    if(dist > 1.77*rBar) return 'var(--warn)';
+    return 'var(--text)';
+  }
+  if(!(sigma>0)) return 'var(--text)';
+  const dist = Math.abs(v-mean);
+  if(dist > 3*sigma) return 'var(--danger)';
+  if(dist > 2*sigma) return 'var(--warn)';
+  return 'var(--text)';
+}
+
+function getShownDataKeys(keys){
+  if(dataPeriodFilter === 'custom'){
+    const fromIso = document.getElementById('data-range-from').value;
+    const toIso = document.getElementById('data-range-to').value;
+    const fromKey = fromIso ? isoToKey(fromIso) : null;
+    const toKey = toIso ? isoToKey(toIso) : null;
+    return keys.filter(k => (!fromKey || k >= fromKey) && (!toKey || k <= toKey));
+  }
+  const days = DATA_PERIOD_DAYS[dataPeriodFilter];
+  if(days === null) return keys;
+  const today = new Date();
+  const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  let cutoff = new Date(todayUTC); cutoff.setUTCDate(cutoff.getUTCDate() - (days-1));
+  const alignMap = {'1w':'w', '1m':'m', '3m':'q', '1y':'y'};
+  if(alignMap[dataPeriodFilter] === dataAggMode){
+    const groupFn = dataAggMode==='w' ? getWeekStart : dataAggMode==='m' ? getMonthStart : dataAggMode==='q' ? getQuarterStart : getYearStart;
+    cutoff = groupFn(todayUTC);
+  }
+  return keys.filter(k => keyToDate(k) >= cutoff && keyToDate(k) <= todayUTC);
+}
+
+function updateDataControlsEnabled(){
+  const hasSource = !!document.getElementById('data-source-select').value;
+  document.getElementById('data-agg-filter').querySelectorAll('button').forEach(b=>b.disabled = !hasSource);
+  document.getElementById('data-period-filter').querySelectorAll('button').forEach(b=>b.disabled = !hasSource);
+  if(!hasSource){
+    document.getElementById('btn-edit-selected-datapoint').disabled = true;
+  }
+}
+
+function getDataPeriodBounds(keys){
+  const today = new Date();
+  const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  let cutoff, rangeEnd;
+  if(dataPeriodFilter === 'custom'){
+    const fromIso = document.getElementById('data-range-from').value;
+    const toIso = document.getElementById('data-range-to').value;
+    cutoff = fromIso ? keyToDate(isoToKey(fromIso)) : null;
+    rangeEnd = toIso ? keyToDate(isoToKey(toIso)) : todayUTC;
+  } else {
+    const days = DATA_PERIOD_DAYS[dataPeriodFilter];
+    if(days === null){ cutoff = null; rangeEnd = keys.length ? keyToDate(keys[0]) : todayUTC; }
+    else { cutoff = new Date(todayUTC); cutoff.setUTCDate(cutoff.getUTCDate()-(days-1)); rangeEnd = todayUTC; }
+  }
+  if(cutoff === null){
+    // onbegrensd: val terug op de vroegste meting die er ooit is geweest
+    cutoff = keys.length ? keyToDate(keys[keys.length-1]) : rangeEnd;
+  }
+  // periode snappen naar het begin van de kalendereenheid als periode en groepering exact overeenkomen
+  // (bijv. 1 week + week-groepering: anders overlapt een voortschrijdend venster van 7 dagen bijna altijd 2 kalenderweken)
+  if(dataPeriodFilter !== 'custom'){
+    const alignMap = {'1w':'w', '1m':'m', '3m':'q', '1y':'y'};
+    if(alignMap[dataPeriodFilter] === dataAggMode){
+      const groupFn = dataAggMode==='w' ? getWeekStart : dataAggMode==='m' ? getMonthStart : dataAggMode==='q' ? getQuarterStart : getYearStart;
+      cutoff = groupFn(todayUTC);
+    }
+  }
+  return {cutoff, rangeEnd};
+}
+
+let __tableWidthCanvas = null;
+function updateTableColumnWidths(rowsHtmlArr){
+  if(!__tableWidthCanvas) __tableWidthCanvas = document.createElement('canvas');
+  const ctx = __tableWidthCanvas.getContext('2d');
+  const monoFont = 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace';
+  ctx.font = '20px ' + monoFont;
+  const ICON_ALLOWANCE = 22; // ruimte voor het pijltje-icoon vóór de verschil-tekst
+  const rowsData = [];
+  rowsHtmlArr.forEach(html=>{
+    const valMatch = html.match(/<td class="val"[^>]*>(.*?)<\/td>/s);
+    if(!valMatch) return; // samenvouw-rij o.i.d., niet relevant
+    const valText = valMatch[1].replace(/<[^>]+>/g,'').trim();
+    if(valText === '–' || valText === '') return; // 'geen meting', telt niet mee
+    const dateMatch = html.match(/<td>(.*?)<\/td>/s);
+    const dateText = dateMatch ? dateMatch[1].replace(/<[^>]+>/g,'').trim() : '';
+    const actMatch = html.match(/<td class="actions-cell">(.*?)<\/td>/s);
+    const actHtml = actMatch ? actMatch[1] : '';
+    const actText = actHtml.replace(/<[^>]+>/g,'').trim();
+    const hasIcon = /<svg/.test(actHtml);
+    rowsData.push({dateText, valText, actText, hasIcon});
+  });
+  const pad = 16;
+  function measureDates(dateFn){
+    let c1=0;
+    rowsData.forEach(r=>{ c1 = Math.max(c1, ...dateFn(r.dateText).map(t=>ctx.measureText(t).width)); });
+    return c1;
+  }
+  const fullDate = t => [t];
+  const yyDate = t => { const m = t.match(/^(\d{2}-\d{2}-)\d{2}(\d{2})$/); return [m ? m[1]+"'"+m[2] : t]; };
+  const wrapDate = t => { const m = t.match(/^(\d{2}-\d{2})-(\d{4})$/); return m ? [m[1], m[2]] : [t]; };
+
+  let maxCol2 = 0;
+  rowsData.forEach(r=>{ maxCol2 = Math.max(maxCol2, ctx.measureText(r.valText).width); });
+  maxCol2 = Math.max(maxCol2, ctx.measureText('nvt').width);
+
+  let maxCol3 = 0;
+  rowsData.forEach(r=>{ maxCol3 = Math.max(maxCol3, ctx.measureText(r.actText).width + (r.hasIcon ? ICON_ALLOWANCE : 0)); });
+  maxCol3 = Math.max(maxCol3, ctx.measureText('nvt').width);
+
+  const scrollEl = document.getElementById('data-table-scroll');
+  const availWidth = Math.max(200, (scrollEl?.clientWidth || 340) - 8);
+
+  let stage = 0; // 0=vol, 1=jaar->'jj, 2=datum wrapt (jjjj), 3=geen verschil
+  let maxCol1 = Math.max(measureDates(fullDate), ctx.measureText('88-88-8888').width);
+  function fits(c1,c2,c3){ return (c1+pad)+(c2+pad)+(c3+pad) <= availWidth; }
+
+  if(!fits(maxCol1, maxCol2, maxCol3)){
+    stage = 1;
+    maxCol1 = Math.max(measureDates(yyDate), ctx.measureText("88-88-'88").width);
+  }
+  if(stage===1 && !fits(maxCol1, maxCol2, maxCol3)){
+    stage = 2;
+    maxCol1 = Math.max(measureDates(wrapDate), ctx.measureText('8888').width);
+  }
+  if(stage===2 && !fits(maxCol1, maxCol2, maxCol3)){
+    stage = 3;
+    maxCol3 = 0;
+  }
+
+  // de gekozen terugvalstand daadwerkelijk in de rij-HTML doorvoeren
+  if(stage===1){
+    rowsHtmlArr = rowsHtmlArr.map(h => h.replace(/<td>(\d{2}-\d{2}-)\d{2}(\d{2})<\/td>/, "<td>$1'$2</td>"));
+  } else if(stage>=2){
+    rowsHtmlArr = rowsHtmlArr.map(h => h.replace(/<td>(\d{2}-\d{2})-(\d{4})<\/td>/, '<td>$1<br>$2</td>'));
+  }
+  if(stage>=3){
+    rowsHtmlArr = rowsHtmlArr.map(h => h.replace(/<td class="actions-cell">.*?<\/td>/s, '<td class="actions-cell"></td>'));
+  }
+
+  const total = maxCol1+pad + maxCol2+pad + maxCol3+pad;
+  const pct1 = (maxCol1+pad)/total*100, pct2 = (maxCol2+pad)/total*100, pct3 = (maxCol3+pad)/total*100;
+  const col1 = document.getElementById('data-table-col-1');
+  const col2 = document.getElementById('data-table-col-2');
+  const col3 = document.getElementById('data-table-col-3');
+  if(col1){ col1.style.width = pct1+'%'; col2.style.width = pct2+'%'; col3.style.width = pct3+'%'; }
+  return rowsHtmlArr;
+}
+function collapseGapRuns(keysDesc, htmlArr, hasValueFn, unitLabel){
+  const result = [];
+  let i = 0;
+  while(i < keysDesc.length){
+    if(hasValueFn(keysDesc[i])){
+      result.push(htmlArr[i]);
+      i++;
+    } else {
+      let j = i;
+      while(j < keysDesc.length && !hasValueFn(keysDesc[j])) j++;
+      const runKeys = keysDesc.slice(i, j);
+      const runId = runKeys[runKeys.length-1] + '_' + runKeys[0]; // oudste_nieuwste
+      if(runKeys.length === 1){
+        for(let x=i; x<j; x++) result.push(htmlArr[x]);
+      } else if(expandedGapRuns.has(runId)){
+        result.push(`<tr class="gap-collapse-row" data-gap-run="${runId}"><td colspan="3" style="text-align:center;color:var(--muted);padding:10px 0;cursor:pointer;">⋯ samenvouwen ⋯</td></tr>`);
+        for(let x=i; x<j; x++) result.push(htmlArr[x]);
+      } else {
+        result.push(`<tr class="gap-summary-row" data-gap-run="${runId}"><td colspan="3" style="text-align:center;color:var(--muted);padding:10px 0;cursor:pointer;">⋯ ${runKeys.length} ${unitLabel} ⋯</td></tr>`);
+      }
+      i = j;
+    }
+  }
+  return result;
+}
+async function renderDataView(){
+  const id = document.getElementById('data-source-select').value;
+  updateDataControlsEnabled();
+  if(id) updateDataAggButtonStates();
+  const tbody = document.getElementById('data-table-body');
+  const emptyEl = document.getElementById('data-empty');
+  tbody.innerHTML = '';
+  if(!id){
+    emptyEl.style.display='block';
+    emptyEl.textContent = 'Kies eerst een bron.';
+    return;
+  }
+  const firstLoad = dataCache[id] === undefined;
+  if(firstLoad){
+    emptyEl.style.display = 'block';
+    emptyEl.textContent = 'Laden…';
+  }
+  await ensureDataLoaded(id);
+  if(firstLoad){
+    emptyEl.textContent = 'Geen metingen gevonden.';
+  }
+  const src = getSource(id);
+  currentFmtThousands = !!src?.duizendtal;
+
+  const data = dataCache[id] || {};
+  let keys = Object.keys(data).sort().reverse();
+  const keysAsc = keys.slice().reverse();
+  let shown = getShownDataKeys(keys);
+  selectedDataKey = null;
+  updateEditSelectedButton();
+
+  let rowsHtml;
+  if(dataAggMode === 'd'){
+    const ascIndexOf = new Map();
+    keysAsc.forEach((k,i)=>ascIndexOf.set(k,i));
+    const {mean: tblMean, sigma: tblSigma} = computeMeanSigma(shown.map(k=>data[k]));
+    const tblRBar = computeRBar(shown.slice().reverse().map(k=>data[k]));
+    const tblChartMode = (chartViewMode === 'xmr' && dataAggMode === 'd') ? 'xmr' : 'standard';
+    function valColor(v){
+      return classifyValueColor(v, tblMean, tblSigma, tblRBar, tblChartMode);
+    }
+    const isRangeMode = chartViewMode === 'range' && dataAggMode === 'd';
+    function diffMagColor(absDiff){
+      if(!isRangeMode || tblRBar==null || tblRBar<=0) return null;
+      return absDiff > 3.267*tblRBar ? 'var(--danger)' : null;
+    }
+    // Voor de Range-kaart: per dag de range-waarde (|verschil met vorige meting|),
+    // en per range-waarde het verschil met de vórige range-waarde (de 'delta').
+    // Beperkt tot de getoonde periode zelf (consistent met de grafiek: eerste dag heeft geen range-waarde).
+    const shownKeysAsc = shown.slice().reverse();
+    const rangeValMap = new Map();
+    const rangeKeysAsc = [];
+    if(isRangeMode){
+      shownKeysAsc.forEach((k,i)=>{
+        if(i>0){
+          rangeValMap.set(k, Math.abs(data[k]-data[shownKeysAsc[i-1]]));
+          rangeKeysAsc.push(k);
+        }
+      });
+    }
+    const rangeDeltaMap = new Map();
+    if(isRangeMode){
+      rangeKeysAsc.forEach((k,i)=>{
+        if(i>0){
+          const delta = rangeValMap.get(k) - rangeValMap.get(rangeKeysAsc[i-1]);
+          rangeDeltaMap.set(k, delta);
+        }
+      });
+    }
+    let allKeysDesc = [];
+    {
+      const bounds = getDataPeriodBounds(keys);
+      for(let d = new Date(bounds.rangeEnd); d >= bounds.cutoff; d.setUTCDate(d.getUTCDate()-1)){
+        allKeysDesc.push(dateToKey(d));
+      }
+    }
+    const structDash = '<span style="color:var(--text);">nvt</span>';
+    rowsHtml = allKeysDesc.map((k,rowIdx)=>{
+      const rowClasses = [];
+      if(k===dateToKey(new Date())) rowClasses.push('today-row');
+      const hasVal = data[k] != null;
+      if(k===selectedDataKey) rowClasses.push('selected');
+      const rowClassAttr = rowClasses.length ? ` class="${rowClasses.join(' ')}"` : '';
+      const rowStyle = '';
+      const isTrulyFirstRow = rowIdx === allKeysDesc.length-1; // allerlaatste (oudste) rij van de hele getoonde tabel
+      if(!hasVal){
+        const valCell = (isTrulyFirstRow && isRangeMode) ? structDash : '–';
+        return `<tr data-k="${k}"${rowClassAttr}${rowStyle}><td>${formatDateCell(k)}</td><td class="val">${valCell}</td>
+        <td class="actions-cell">${isTrulyFirstRow ? structDash : '–'}</td></tr>`;
+      }
+      if(isRangeMode){
+        const rv = rangeValMap.get(k);
+        const rvStyle = (rv!=null && diffMagColor(rv)) ? ` style="color:${diffMagColor(rv)};"` : '';
+        const rvTxt = rv!=null ? fmtVal(rv, src?.decimalen) : (isTrulyFirstRow ? structDash : '–');
+        const delta = rangeDeltaMap.get(k);
+        let deltaCell = isTrulyFirstRow ? structDash : '–';
+        if(delta!=null){
+          if(delta > 0){
+            deltaCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--danger);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/></svg>${fmtVal(Math.abs(delta), src?.decimalen)}`;
+          } else if(delta < 0){
+            deltaCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--good);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/></svg>${fmtVal(Math.abs(delta), src?.decimalen)}`;
+          } else {
+            deltaCell = '–';
+          }
+        }
+        return `<tr data-k="${k}"${rowClassAttr}${rowStyle}><td>${formatDateCell(k)}</td><td class="val"${rvStyle}>${rvTxt}</td>
+        <td class="actions-cell">${deltaCell}</td></tr>`;
+      }
+      const idx = ascIndexOf.get(k);
+      const prevVal = idx > 0 ? data[keysAsc[idx-1]] : null;
+      let diffCell = isTrulyFirstRow ? structDash : '–';
+      if(prevVal !== null){
+        const diff = data[k] - prevVal;
+        if(diff > 0){
+          diffCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--danger);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/></svg>${fmtVal(Math.abs(diff), src?.decimalen)}`;
+        } else if(diff < 0){
+          diffCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--good);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/></svg>${fmtVal(Math.abs(diff), src?.decimalen)}`;
+        } else {
+          diffCell = '–';
+        }
+      }
+      return `<tr data-k="${k}"${rowClassAttr}${rowStyle}><td>${formatDateCell(k)}</td><td class="val" style="color:${valColor(data[k])};">${fmtVal(data[k], src?.decimalen)}</td>
+        <td class="actions-cell">${diffCell}</td></tr>`;
+    });
+    rowsHtml = updateTableColumnWidths(rowsHtml);
+    rowsHtml = collapseGapRuns(allKeysDesc, rowsHtml, k => data[k] != null, 'dagen');
+  } else {
+    const pointsAsc = shown.slice().reverse().map(k=>({date: keyToDate(k), value: data[k]}));
+    let aggPoints = aggregatePoints(pointsAsc, dataAggMode);
+    {
+      const bounds = getDataPeriodBounds(keys);
+      aggPoints = fillAggregationGaps(aggPoints, dataAggMode, bounds.cutoff, bounds.rangeEnd);
+    }
+    const rows = aggPoints.slice().reverse();
+    const {mean: aggMean, sigma: aggSigma} = computeMeanSigma(aggPoints.filter(p=>p.value!=null).map(p=>p.value));
+    function aggValColor(v){
+      return classifyValueColor(v, aggMean, aggSigma, null, 'standard');
+    }
+    const aggGroupFn = dataAggMode==='w' ? getWeekStart : dataAggMode==='m' ? getMonthStart : dataAggMode==='q' ? getQuarterStart : getYearStart;
+    const todayForRow = new Date();
+    const todayUTCForRow = new Date(Date.UTC(todayForRow.getFullYear(), todayForRow.getMonth(), todayForRow.getDate()));
+    const currentPeriodEnd = getGroupEnd(aggGroupFn(todayUTCForRow), dataAggMode, todayUTCForRow).getTime();
+    // Range-modus (verschil tussen opeenvolgende groepen), consistent met de grafiek — ook bij groeperen beschikbaar.
+    const isRangeModeAgg = chartViewMode === 'range';
+    const aggRealAsc = aggPoints.filter(p=>p.value!=null).slice(); // aggPoints is al chronologisch oplopend
+    const aggRangeValMap = new Map();
+    const aggRangeKeysAsc = [];
+    if(isRangeModeAgg){
+      aggRealAsc.forEach((p,i)=>{
+        if(i>0){
+          const k = dateToKey(p.date);
+          aggRangeValMap.set(k, Math.abs(p.value - aggRealAsc[i-1].value));
+          aggRangeKeysAsc.push(k);
+        }
+      });
+    }
+    const aggRangeDeltaMap = new Map();
+    if(isRangeModeAgg){
+      aggRangeKeysAsc.forEach((k,i)=>{
+        if(i>0){
+          aggRangeDeltaMap.set(k, aggRangeValMap.get(k) - aggRangeValMap.get(aggRangeKeysAsc[i-1]));
+        }
+      });
+    }
+    const aggRBar = computeRBar(aggRealAsc.map(p=>p.value));
+    function aggDiffMagColor(absDiff){
+      if(!isRangeModeAgg || aggRBar==null || aggRBar<=0) return null;
+      return absDiff > 3.267*aggRBar ? 'var(--danger)' : null;
+    }
+    rowsHtml = rows.map((p,idx)=>{
+      const k = dateToKey(p.date);
+      const dateLabel = fmtGroupLabelTable(p.date, dataAggMode, k);
+      const isCurrentPeriod = p.date.getTime() === currentPeriodEnd;
+      const isTrulyFirstAggRow = idx === rows.length-1; // allerlaatste (oudste) rij van de hele getoonde (geaggregeerde) tabel
+      const structDashAgg = '<span style="color:var(--text);">nvt</span>';
+      if(p.value == null){
+        const valCellAgg = (isTrulyFirstAggRow && isRangeModeAgg) ? structDashAgg : '–';
+        return `<tr data-k="${k}"${isCurrentPeriod ? ' class="today-row"' : ''}><td>${dateLabel}</td><td class="val">${valCellAgg}</td>
+        <td class="actions-cell">${isTrulyFirstAggRow ? structDashAgg : '–'}</td></tr>`;
+      }
+      const rowClasses = [];
+      if(isCurrentPeriod) rowClasses.push('today-row');
+      if(k===selectedDataKey) rowClasses.push('selected');
+      const rowClassAttr = rowClasses.length ? ` class="${rowClasses.join(' ')}"` : '';
+      if(isRangeModeAgg){
+        const rv = aggRangeValMap.get(k);
+        const rvStyle = (rv!=null && aggDiffMagColor(rv)) ? ` style="color:${aggDiffMagColor(rv)};"` : '';
+        const rvTxt = rv!=null ? fmtVal(rv, src?.decimalen) : (isTrulyFirstAggRow ? structDashAgg : '–');
+        const delta = aggRangeDeltaMap.get(k);
+        let deltaCell = isTrulyFirstAggRow ? structDashAgg : '–';
+        if(delta!=null){
+          if(delta > 0){
+            deltaCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--danger);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/></svg>${fmtVal(Math.abs(delta), src?.decimalen)}`;
+          } else if(delta < 0){
+            deltaCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--good);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/></svg>${fmtVal(Math.abs(delta), src?.decimalen)}`;
+          } else {
+            deltaCell = '–';
+          }
+        }
+        return `<tr data-k="${k}"${rowClassAttr}><td>${dateLabel}</td><td class="val"${rvStyle}>${rvTxt}</td>
+        <td class="actions-cell">${deltaCell}</td></tr>`;
+      }
+      const prev = rows.slice(idx+1).find(r=>r.value!=null);
+      let diffCell = isTrulyFirstAggRow ? structDashAgg : '–';
+      if(prev){
+        const diff = p.value - prev.value;
+        if(diff > 0){
+          diffCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--danger);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/></svg>${fmtVal(Math.abs(diff), src?.decimalen)}`;
+        } else if(diff < 0){
+          diffCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--good);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/></svg>${fmtVal(Math.abs(diff), src?.decimalen)}`;
+        } else {
+          diffCell = '–';
+        }
+      }
+      return `<tr data-k="${k}"${rowClassAttr}><td>${dateLabel}</td><td class="val" style="color:${aggValColor(p.value)};">${fmtVal(p.value, src?.decimalen)}</td>
+        <td class="actions-cell">${diffCell}</td></tr>`;
+    });
+    const aggUnitLabel = {w:'weken', m:'maanden', q:'kwartalen', y:'jaren'}[dataAggMode] || 'periodes';
+    const aggValueByKey = new Map(rows.map(p=>[dateToKey(p.date), p.value]));
+    rowsHtml = updateTableColumnWidths(rowsHtml);
+    rowsHtml = collapseGapRuns(rows.map(p=>dateToKey(p.date)), rowsHtml, k => aggValueByKey.get(k) != null, aggUnitLabel);
+  }
+  if(!rowsHtml.length) emptyEl.textContent = 'Geen metingen gevonden.';
+  emptyEl.style.display = rowsHtml.length ? 'none' : 'block';
+  setupVirtualTable('data-table-scroll', 'data-table-body', rowsHtml, (tbody)=>{
+    tbody.querySelectorAll('tr[data-k]').forEach(tr=>{
+      tr.classList.toggle('selected', tr.dataset.k === selectedDataKey);
+    });
+  });
+  if(dataShowChart) await renderDataChartPreview();
+  requestAnimationFrame(()=>requestAnimationFrame(fitVisibleTableScrollBoxes));
+}
+
+document.getElementById('data-table-body').addEventListener('click', (e)=>{
+  const gapRow = e.target.closest('tr.gap-summary-row');
+  if(gapRow){
+    const scrollBox = document.getElementById('data-table-scroll');
+    const prevScrollTop = scrollBox.scrollTop;
+    expandedGapRuns.add(gapRow.dataset.gapRun);
+    renderDataView();
+    requestAnimationFrame(()=>{ scrollBox.scrollTop = prevScrollTop; });
+    return;
+  }
+  const collapseRow = e.target.closest('tr.gap-collapse-row');
+  if(collapseRow){
+    const scrollBox = document.getElementById('data-table-scroll');
+    const prevScrollTop = scrollBox.scrollTop;
+    expandedGapRuns.delete(collapseRow.dataset.gapRun);
+    renderDataView();
+    requestAnimationFrame(()=>{ scrollBox.scrollTop = prevScrollTop; });
+    return;
+  }
+  const tr = e.target.closest('tr[data-k]');
+  if(!tr) return;
+  const k = tr.dataset.k;
+  const wasSelected = tr.classList.contains('selected');
+  document.querySelectorAll('#data-table-body tr.selected').forEach(r=>r.classList.remove('selected'));
+  if(wasSelected){
+    selectedDataKey = null;
+  } else {
+    tr.classList.add('selected');
+    selectedDataKey = k;
+  }
+  updateEditSelectedButton();
+  if(dataShowChart) renderDataChartPreview();
+});
+
+function updateEditSelectedButton(){
+  const editBtn = document.getElementById('btn-edit-selected-datapoint');
+  editBtn.disabled = !selectedDataKey || dataAggMode !== 'd' || chartViewMode === 'range';
+}
+
+let currentDatapointKey = null;
+const DAG_NAMEN = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+function getDayAbbrev(key){
+  return DAG_NAMEN[keyToDate(key).getUTCDay()];
+}
+function openEditDatapointModal(id, key){
+  const data = dataCache[id] || {};
+  const src = getSource(id);
+  currentFmtThousands = !!src?.duizendtal;
+  setExplicitEmpty(false);
+  applyValueInputConstraints(src);
+  currentDatapointKey = key;
+  document.getElementById('f-data-date-display').textContent = fmtDateNL(key);
+  document.getElementById('f-data-date-dayname').textContent = getDayAbbrev(key);
+  document.getElementById('f-data-date-todaybar').style.display = (key === dateToKey(new Date())) ? 'inline-block' : 'none';
+  document.getElementById('f-data-value-unit').textContent = src?.eenheid ? ` (${src.eenheid})` : '';
+  if(data[key] == null){
+    // geselecteerde dag heeft nog geen waarde: open als 'toevoegen' met deze datum al ingevuld
+    editingDataKey = null;
+    document.getElementById('datapoint-modal-title').textContent = 'Meting toevoegen';
+    const def = getDefaultDatapointValue(id, keyToIsoDate(key));
+    document.getElementById('f-data-value').value = def!=null ? fmtValPlain(def, src?.decimalen) : '';
+    document.getElementById('btn-delete-datapoint').style.display = 'none';
+  } else {
+    editingDataKey = key;
+    document.getElementById('datapoint-modal-title').textContent = 'Meting bewerken';
+    document.getElementById('f-data-value').value = data[key];
+    document.getElementById('btn-delete-datapoint').style.display = 'flex';
+  }
+  document.getElementById('btn-no-measurement').style.display = 'flex';
+  openDatapointModal();
+}
+
+document.getElementById('btn-edit-selected-datapoint').addEventListener('click', ()=>{
+  const id = document.getElementById('data-source-select').value;
+  if(!id || !selectedDataKey) return;
+  openEditDatapointModal(id, selectedDataKey);
+});
+
+let valueInputDecimals = 1;
+function applyValueInputConstraints(src){
+  const el = document.getElementById('f-data-value');
+  el.min = (src?.min ?? null) !== null ? src.min : '';
+  el.max = (src?.max ?? null) !== null ? src.max : '';
+  const dec = src?.decimalen ?? 1;
+  el.step = dec>0 ? (1/Math.pow(10,dec)).toString() : '1';
+  valueInputDecimals = dec;
+}
+function sanitizeDecimalInput(v){
+  let cleaned = v.replace(/,/g, '.').replace(/[^0-9.\-]/g, '');
+  // maximaal één punt en één min-teken (vooraan) toestaan
+  cleaned = cleaned.replace(/(?!^)-/g, '');
+  const firstDot = cleaned.indexOf('.');
+  if(firstDot !== -1){
+    cleaned = cleaned.slice(0, firstDot+1) + cleaned.slice(firstDot+1).replace(/\./g, '');
+  }
+  return cleaned;
+}
+let isExplicitEmpty = false;
+function setExplicitEmpty(state){
+  isExplicitEmpty = state;
+  document.getElementById('btn-no-measurement').classList.toggle('active', state);
+  const valueEl = document.getElementById('f-data-value');
+  if(state){
+    valueEl.value = '';
+    valueEl.placeholder = '– geen meting –';
+  } else {
+    valueEl.placeholder = '';
+  }
+}
+document.getElementById('btn-no-measurement').addEventListener('click', ()=>{
+  setExplicitEmpty(!isExplicitEmpty);
+});
+document.getElementById('f-data-value').addEventListener('input', (e)=>{
+  if(isExplicitEmpty) setExplicitEmpty(false);
+  let v = e.target.value;
+  let cleaned = sanitizeDecimalInput(v);
+  if(valueInputDecimals === 0){
+    cleaned = cleaned.replace(/\./g, '');
+  } else {
+    const parts = cleaned.split('.');
+    if(parts.length > 1 && parts[1].length > valueInputDecimals){
+      cleaned = parts[0] + '.' + parts[1].slice(0, valueInputDecimals);
+    }
+  }
+  if(cleaned !== v) e.target.value = cleaned;
+});
+['f-min','f-max','f-doelx','f-doelr'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', (e)=>{
+    const cleaned = sanitizeDecimalInput(e.target.value);
+    if(cleaned !== e.target.value) e.target.value = cleaned;
+  });
+});
+document.getElementById('f-puntjes-drempel').addEventListener('input', (e)=>{
+  const cleaned = e.target.value.replace(/[^0-9]/g, '');
+  if(cleaned !== e.target.value) e.target.value = cleaned;
+});
+
+async function syncDataFile(id){
+  if(!dirHandle) return;
+  const src = getSource(id);
+  if(!src) return;
+  try{
+    await writeJsonToDir(src.bestand, dataFileObj(dataCache[id] || {}));
+    dataFileExists[id] = true;
+  }catch(e){
+    console.error('data schrijven mislukt', e);
+    showAlert('Schrijven naar '+src.bestand+' is mislukt: '+e.message);
+  }
+}
+
+let editingDataKey = null;
+let selectedDataKey = null;
+
+function openDatapointModal(){
+  document.getElementById('datapoint-modal-overlay').style.display = 'flex';
+}
+function closeDatapointModal(){
+  document.getElementById('datapoint-modal-overlay').style.display = 'none';
+  editingDataKey = null;
+  currentDatapointKey = null;
+  document.getElementById('datapoint-modal-title').textContent = 'Meting toevoegen';
+  document.getElementById('f-data-date-todaybar').style.display = 'none';
+  document.getElementById('f-data-value').value = '';
+  document.getElementById('btn-delete-datapoint').style.display = 'none';
+  setExplicitEmpty(false);
+}
+
+function getDefaultDatapointValue(id, iso){
+  const data = dataCache[id] || {};
+  const selectedKey = isoToKey(iso);
+  if(data[selectedKey] != null) return data[selectedKey];
+  const prevKey = dateToKey(new Date(keyToDate(selectedKey).getTime() - 24*60*60*1000));
+  if(data[prevKey] != null) return data[prevKey];
+  const vals = Object.values(data).filter(v=>v!=null && !isNaN(v));
+  if(vals.length) return vals.reduce((s,v)=>s+v,0)/vals.length;
+  return null;
+}
+
+document.getElementById('btn-cancel-datapoint').addEventListener('click', closeDatapointModal);
+document.getElementById('datapoint-modal-overlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'datapoint-modal-overlay') closeDatapointModal();
+});
+document.getElementById('btn-delete-datapoint').addEventListener('click', async ()=>{
+  const id = document.getElementById('data-source-select').value;
+  if(!id || !editingDataKey) return;
+  const ok = await showConfirm(`Meting van ${fmtDateNL(editingDataKey)} verwijderen?`, 'Verwijderen');
+  if(!ok) return;
+  delete dataCache[id][editingDataKey];
+  await syncDataFile(id);
+  closeDatapointModal();
+  renderDataView();
+});
+
+document.getElementById('btn-add-datapoint').addEventListener('click', async ()=>{
+  const id = document.getElementById('data-source-select').value;
+  if(!id){ showAlert('Kies eerst een bron.'); return; }
+  if(!dirHandle){ showAlert('Koppel eerst een werkmap (zie tabblad Bronnen).'); return; }
+  const newKey = currentDatapointKey;
+  if(!newKey){ showAlert('Geen datum geselecteerd.'); return; }
+  dataCache[id] = dataCache[id] || {};
+
+  if(isExplicitEmpty){
+    const willDelete = dataCache[id][newKey] != null;
+    if(willDelete){
+      const ok = await showConfirm(`Er staat al een meting op ${fmtDateNL(newKey)}. Wil je die verwijderen?`, 'Verwijderen');
+      if(!ok) return;
+    }
+    if(editingDataKey && editingDataKey !== newKey) delete dataCache[id][editingDataKey];
+    delete dataCache[id][newKey];
+    await syncDataFile(id);
+    closeDatapointModal();
+    renderDataView();
+    return;
+  }
+
+  const valueEl = document.getElementById('f-data-value');
+  const val = valueEl.value;
+  if(val===''){ showAlert('Vul een waarde in (of kies "Geen meting").'); return; }
+  const num = Number(val);
+  if(isNaN(num)){ showAlert('Ongeldige waarde.'); return; }
+  const src = getSource(id);
+  currentFmtThousands = !!src?.duizendtal;
+  if(src?.min != null && num < src.min){ showAlert(`Waarde moet minimaal ${src.min} zijn.`); return; }
+  if(src?.max != null && num > src.max){ showAlert(`Waarde moet maximaal ${src.max} zijn.`); return; }
+  const dec = src?.decimalen ?? 1;
+  const decimalsInInput = val.includes('.') ? val.split('.')[1].length : 0;
+  if(decimalsInInput > dec){
+    showAlert(`Deze bron staat maximaal ${dec} decima${dec===1?'al':'len'} toe.`);
+    return;
+  }
+  const willOverwrite = newKey !== editingDataKey && dataCache[id][newKey] != null;
+  if(willOverwrite){
+    const ok = await showConfirm(`Er bestaat al een meting op ${fmtDateNL(newKey)} (${fmtVal(dataCache[id][newKey], dec)} ${src?.eenheid||''}). Wil je die overschrijven?`, 'Overschrijven');
+    if(!ok) return;
+  }
+  if(keyToDate(newKey) > todayUTCDate()){
+    const proceed = await showWarningConfirm(`${fmtDateNL(newKey)} ligt in de toekomst.`, 'Opslaan');
+    if(!proceed) return;
+  }
+  if(editingDataKey && editingDataKey !== newKey) delete dataCache[id][editingDataKey];
+  dataCache[id][newKey] = num;
+  await syncDataFile(id);
+  closeDatapointModal();
+  renderDataView();
+});
+
+const PERIOD_DAYS = {'1w':7,'1m':31,'3m':91,'6m':182,'9m':273,'1y':365,'5y':1826,'all':null};
+
+const AGG_MAX_GAP_DAYS = {d:1, w:10, m:40, q:100, y:400};
+function getWeekStart(date){
+  const d = new Date(date);
+  const day = d.getUTCDay();
+  const diff = (day===0 ? -6 : 1-day);
+  d.setUTCDate(d.getUTCDate()+diff);
+  return d;
+}
+function getMonthStart(date){ return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)); }
+function getQuarterStart(date){ const q = Math.floor(date.getUTCMonth()/3); return new Date(Date.UTC(date.getUTCFullYear(), q*3, 1)); }
+function getYearStart(date){ return new Date(Date.UTC(date.getUTCFullYear(), 0, 1)); }
+
+function getGroupEnd(startDate, mode, capAt){
+  const d = new Date(startDate);
+  if(mode==='w'){ d.setUTCDate(d.getUTCDate()+6); }
+  else if(mode==='m'){ d.setUTCMonth(d.getUTCMonth()+1); d.setUTCDate(d.getUTCDate()-1); }
+  else if(mode==='q'){ d.setUTCMonth(d.getUTCMonth()+3); d.setUTCDate(d.getUTCDate()-1); }
+  else { d.setUTCFullYear(d.getUTCFullYear()+1); d.setUTCDate(d.getUTCDate()-1); }
+  if(capAt && d > capAt) return new Date(capAt);
+  return d;
+}
+function todayUTCDate(){
+  const t = new Date();
+  return new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()));
+}
+function fillAggregationGaps(aggPoints, mode, cutoff, rangeEnd){
+  const groupFn = mode==='w' ? getWeekStart : mode==='m' ? getMonthStart : mode==='q' ? getQuarterStart : getYearStart;
+  function nextGroupStart(d){
+    const nd = new Date(d);
+    if(mode==='w') nd.setUTCDate(nd.getUTCDate()+7);
+    else if(mode==='m') nd.setUTCMonth(nd.getUTCMonth()+1);
+    else if(mode==='q') nd.setUTCMonth(nd.getUTCMonth()+3);
+    else nd.setUTCFullYear(nd.getUTCFullYear()+1);
+    return nd;
+  }
+  const byTime = new Map(aggPoints.map(p=>[p.date.getTime(), p]));
+  const filled = [];
+  let cursor = groupFn(cutoff);
+  const todayCap = todayUTCDate();
+  const lastStart = groupFn(rangeEnd > todayCap ? todayCap : rangeEnd);
+  while(cursor <= lastStart){
+    const endDate = getGroupEnd(cursor, mode, todayCap);
+    const t = endDate.getTime();
+    filled.push(byTime.has(t) ? byTime.get(t) : {date: endDate, value: null});
+    cursor = nextGroupStart(cursor);
+  }
+  return filled;
+}
+function aggregatePoints(points, mode){
+  if(mode==='d' || !points.length) return points;
+  const groupFn = mode==='w' ? getWeekStart : mode==='m' ? getMonthStart : mode==='q' ? getQuarterStart : getYearStart;
+  const groups = new Map();
+  points.forEach(p=>{
+    const key = groupFn(p.date).getTime();
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p.value);
+  });
+  const todayCapForAgg = todayUTCDate();
+  return Array.from(groups.entries())
+    .sort((a,b)=>a[0]-b[0])
+    .map(([t,vals])=>({
+      date: getGroupEnd(new Date(t), mode, t <= todayCapForAgg.getTime() ? todayCapForAgg : null),
+      value: vals.reduce((s,v)=>s+v,0)/vals.length
+    }));
+}
+
+/* Berekent voor de huidige bron+periode de punten en het bereik van de x-as.
+   Wordt gedeeld door de Grafiek-tab en de XmR-tab. */
+async function getChartPointsForSelection(periodKey, fromElId, toElId){
+  const id = document.getElementById('data-source-select').value;
+  if(!id) return null;
+  await ensureDataLoaded(id);
+  const src = getSource(id);
+  currentFmtThousands = !!src?.duizendtal;
+  const data = dataCache[id] || {};
+  if(!dirHandle) return {id, src, points: [], chartXMin: null, rangeEnd: null, noDir: true};
+
+  const today = new Date();
+  const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+
+  let cutoff, rangeEnd, isAll;
+  if(periodKey === 'custom'){
+    const fromIso = document.getElementById(fromElId).value;
+    const toIso = document.getElementById(toElId).value;
+    cutoff = fromIso ? keyToDate(isoToKey(fromIso)) : new Date(Date.UTC(1970,0,1));
+    rangeEnd = toIso ? keyToDate(isoToKey(toIso)) : todayUTC;
+    isAll = !fromIso;
+  } else {
+    const days = PERIOD_DAYS[periodKey];
+    cutoff = days===null ? new Date(Date.UTC(1970,0,1)) : (()=>{ const c = new Date(todayUTC); c.setUTCDate(c.getUTCDate()-(days-1)); return c; })();
+    if(days===null){
+      const allKeysSorted = Object.keys(data).sort();
+      rangeEnd = allKeysSorted.length ? keyToDate(allKeysSorted[allKeysSorted.length-1]) : todayUTC;
+    } else {
+      rangeEnd = todayUTC;
+    }
+    isAll = days===null;
+    // periode snappen naar het begin van de kalendereenheid als periode en groepering exact overeenkomen
+    const alignMap = {'1w':'w', '1m':'m', '3m':'q', '1y':'y'};
+    if(alignMap[periodKey] === dataAggMode){
+      const groupFn = dataAggMode==='w' ? getWeekStart : dataAggMode==='m' ? getMonthStart : dataAggMode==='q' ? getQuarterStart : getYearStart;
+      cutoff = groupFn(todayUTC);
+    }
+  }
+
+  const points = Object.entries(data)
+    .map(([k,v])=>({key:k, date:keyToDate(k), value:Number(v)}))
+    .filter(p => p.date >= cutoff && p.date <= rangeEnd)
+    .sort((a,b)=>a.date-b.date);
+
+  const chartXMin = (isAll && points.length) ? points[0].date : cutoff;
+  return {id, src, points, chartXMin, rangeEnd};
+}
+
+async function renderDataChartPreview(){
+  if(!dataShowChart) return;
+  const id = document.getElementById('data-source-select').value;
+  const canvas = document.getElementById('data-chart-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(!id) return;
+
+  const sel = await getChartPointsForSelection(dataPeriodFilter, 'data-range-from', 'data-range-to');
+  if(!sel || sel.noDir) return;
+  const {src, rangeEnd} = sel;
+  const points = aggregatePoints(sel.points, dataAggMode);
+  const chartXMin = points.length
+    ? new Date(Math.min(sel.chartXMin.getTime(), points[0].date.getTime()))
+    : sel.chartXMin;
+  const chartXMax = points.length
+    ? new Date(Math.max(rangeEnd.getTime(), points[points.length-1].date.getTime()))
+    : rangeEnd;
+  // Volledige, met-gaten-gevulde tijdlijn — alleen gebruikt om de x-positie van de échte punten
+  // correct te bepalen (zodat lege periodes ruimte innemen); statistieken blijven op 'points' zelf gebaseerd.
+  const fullGroupSlots = (dataAggMode !== 'd' && points.length)
+    ? fillAggregationGaps(points, dataAggMode, chartXMin, chartXMax)
+    : points;
+
+  const effectiveChartMode = (chartViewMode === 'xmr' && dataAggMode !== 'd') ? 'standard' : chartViewMode;
+
+  const n = points.length;
+  let mean=null, sigma=null, minVal=null, maxVal=null, sumVal=null;
+  if(n>=1){
+    minVal = Math.min(...points.map(p=>p.value));
+    maxVal = Math.max(...points.map(p=>p.value));
+    sumVal = points.reduce((s,p)=>s+p.value,0);
+  }
+  ({mean, sigma} = computeMeanSigma(points.map(p=>p.value)));
+
+  const rawTotalCount = Object.keys(dataCache[id] || {}).length;
+  const totalCount = (effectiveChartMode === 'range' && rawTotalCount>0) ? rawTotalCount-1 : rawTotalCount;
+  const allKeysForBounds = Object.keys(dataCache[id] || {}).sort().reverse();
+  const periodBounds = getDataPeriodBounds(allKeysForBounds);
+  const oneDayMsForCount = 24*60*60*1000;
+  let shownCount;
+  if(dataAggMode === 'd'){
+    shownCount = Math.max(0, Math.round((periodBounds.rangeEnd - periodBounds.cutoff)/oneDayMsForCount) + 1);
+  } else {
+    const groupFnForCount = dataAggMode==='w' ? getWeekStart : dataAggMode==='m' ? getMonthStart : dataAggMode==='q' ? getQuarterStart : getYearStart;
+    function nextGroupStartForCount(d){
+      const nd = new Date(d);
+      if(dataAggMode==='w') nd.setUTCDate(nd.getUTCDate()+7);
+      else if(dataAggMode==='m') nd.setUTCMonth(nd.getUTCMonth()+1);
+      else if(dataAggMode==='q') nd.setUTCMonth(nd.getUTCMonth()+3);
+      else nd.setUTCFullYear(nd.getUTCFullYear()+1);
+      return nd;
+    }
+    let cursor = groupFnForCount(periodBounds.cutoff);
+    const lastStart = groupFnForCount(periodBounds.rangeEnd);
+    let groupCount = 0;
+    while(cursor <= lastStart){ groupCount++; cursor = nextGroupStartForCount(cursor); }
+    shownCount = groupCount;
+  }
+  if(effectiveChartMode === 'range') shownCount = Math.max(0, shownCount - 1);
+  const dec = src?.decimalen ?? 1;
+  if(n===0){
+    window.lastChartStats = {n:0, totalCount, shownCount, mean:null, sigma:null, rBar:null, madVal:null, minVal:null, maxVal:null, sumVal:null, ucl:null, uwl:null, lwl:null, lcl:null, doelWaarde:null, doelBereik:null, doelBoven:null, doelOnder:null, dec, chartMode:'standard'};
+    return;
+  }
+  let rBar = null;
+  if(n>=2){
+    let sum = 0;
+    for(let i=1;i<points.length;i++){
+      sum += Math.abs(points[i].value - points[i-1].value);
+    }
+    rBar = sum / (n-1);
+  }
+  let madVal = null;
+  if(n>=1 && mean!=null){
+    madVal = points.reduce((s,p)=>s+Math.abs(p.value-mean),0) / n;
+  }
+  // Statistieken-tab: berekend op de daadwerkelijk getoonde data (bij Range dus de range-reeks zelf, niet de ruwe metingen)
+  let dispPoints = points;
+  if(effectiveChartMode === 'range'){
+    dispPoints = [];
+    for(let i=1;i<points.length;i++) dispPoints.push({value: Math.abs(points[i].value-points[i-1].value)});
+  }
+  const dispN = dispPoints.length;
+  let dispMean=null, dispSigma=null, dispMinVal=null, dispMaxVal=null, dispSumVal=null, dispMadVal=null;
+  if(dispN>=1){
+    dispMinVal = Math.min(...dispPoints.map(p=>p.value));
+    dispMaxVal = Math.max(...dispPoints.map(p=>p.value));
+    dispSumVal = dispPoints.reduce((s,p)=>s+p.value,0);
+  }
+  ({mean: dispMean, sigma: dispSigma} = computeMeanSigma(dispPoints.map(p=>p.value)));
+  if(dispN>=1 && dispMean!=null){
+    dispMadVal = dispPoints.reduce((s,p)=>s+Math.abs(p.value-dispMean),0) / dispN;
+  }
+  const useXmr = effectiveChartMode === 'xmr' && rBar!=null && rBar>0;
+  const useRange = effectiveChartMode === 'range' && rBar!=null;
+  const ucl = useRange ? rBar*3.267 : (useXmr ? mean + 2.66*rBar : ((mean!=null && sigma!=null) ? mean + 3*sigma : null));
+  const uwl = useRange ? null : (useXmr ? mean + 1.77*rBar : ((mean!=null && sigma!=null) ? mean + 2*sigma : null));
+  const lwl = useRange ? null : (useXmr ? mean - 1.77*rBar : ((mean!=null && sigma!=null) ? mean - 2*sigma : null));
+  const lcl = useRange ? 0 : (useXmr ? mean - 2.66*rBar : ((mean!=null && sigma!=null) ? mean - 3*sigma : null));
+  const doelWaarde = useRange ? null : (src?.doel_x ?? null);
+  const doelBereik = useRange ? null : (src?.doel_r ?? null);
+  const doelBoven = (!useRange && src?.doel_x != null && src?.doel_r != null) ? src.doel_x + src.doel_r/2 : null;
+  const doelOnder = (!useRange && src?.doel_x != null && src?.doel_r != null) ? src.doel_x - src.doel_r/2 : null;
+  window.lastChartStats = {
+    n: dispN, totalCount, shownCount, mean: dispMean, sigma: dispSigma, rBar, madVal: dispMadVal,
+    minVal: dispMinVal, maxVal: dispMaxVal, sumVal: dispSumVal,
+    ucl, uwl, lwl, lcl, doelWaarde, doelBereik, doelBoven, doelOnder, dec, chartMode: effectiveChartMode
+  };
+
+  drawChart(ctx, canvas, points, mean, sigma, src, chartXMin, chartXMax, AGG_MAX_GAP_DAYS[dataAggMode], rBar, effectiveChartMode, true, selectedDataKey, fullGroupSlots);
+}
+
+function openChartStatsModal(){
+  if(window.chartSwipeJustHappened) return;
+  const stats = window.lastChartStats;
+  if(!stats) return;
+  document.getElementById('chart-stats-shown-count').textContent = stats.totalCount ? '('+stats.totalCount+')' : '';
+  const badgeEl = document.getElementById('chart-stats-badge');
+  if(stats.chartMode === 'xmr' || stats.chartMode === 'range'){
+    badgeEl.textContent = stats.chartMode === 'xmr' ? 'XmR' : 'Range';
+    badgeEl.style.display = 'inline-block';
+  } else {
+    badgeEl.style.display = 'none';
+  }
+  const bodyStats = document.getElementById('chart-stats-modal-body');
+  const bodyChart = document.getElementById('chart-stats-modal-body-chart');
+  const xBar = '<span style="position:relative;display:inline-block;vertical-align:baseline;">x<i style="position:absolute;left:0;right:0;top:1px;border-top:1.5px solid currentColor;font-style:normal;"></i></span>';
+  const rBarSym = '<span style="position:relative;display:inline-block;vertical-align:baseline;">r<i style="position:absolute;left:0;right:0;top:1px;border-top:1.5px solid currentColor;font-style:normal;"></i></span>';
+  const madSym = `|x−${xBar}|`;
+  const isRangeStats = stats.chartMode === 'range';
+  const primaryLabel = isRangeStats ? rBarSym : xBar;
+  const statsRows = [
+    ['n', `${stats.n} / ${stats.shownCount}`, 'var(--text)'],
+    [primaryLabel, stats.mean!=null ? `<strong>${fmtVal(stats.mean, stats.dec)}</strong>` : '–', 'var(--accent)'],
+    ['σₙ₋₁', (stats.sigma!=null && stats.sigma>0) ? fmtVal(stats.sigma, stats.dec) : '–', 'var(--text)'],
+  ];
+  if(!isRangeStats){
+    statsRows.push([rBarSym, stats.rBar!=null ? fmtVal(stats.rBar, stats.dec) : '–', 'var(--text)']);
+  }
+  statsRows.push(
+    [madSym, stats.madVal!=null ? fmtVal(stats.madVal, stats.dec) : '–', 'var(--text)'],
+    ['Σ', stats.sumVal!=null ? fmtVal(stats.sumVal, stats.dec) : '–', 'var(--text)'],
+    ['min', stats.minVal!=null ? fmtVal(stats.minVal, stats.dec) : '–', 'var(--text)'],
+    ['max', stats.maxVal!=null ? fmtVal(stats.maxVal, stats.dec) : '–', 'var(--text)']
+  );
+  const formulaStyle = 'color:var(--text);margin-left:6px;';
+  let uclF, uwlF, lwlF, lclF;
+  if(stats.chartMode === 'range'){
+    uclF = `<span style="${formulaStyle}">(3.267×${rBarSym})</span>`;
+    uwlF = ''; lwlF = '';
+    lclF = `<span style="${formulaStyle}">(0)</span>`;
+  } else if(stats.chartMode === 'xmr'){
+    uclF = `<span style="${formulaStyle}">(${xBar}+2.66×${rBarSym})</span>`;
+    uwlF = `<span style="${formulaStyle}">(${xBar}+1.77×${rBarSym})</span>`;
+    lwlF = `<span style="${formulaStyle}">(${xBar}−1.77×${rBarSym})</span>`;
+    lclF = `<span style="${formulaStyle}">(${xBar}−2.66×${rBarSym})</span>`;
+  } else {
+    uclF = `<span style="${formulaStyle}">(${xBar}+3σₙ₋₁)</span>`;
+    uwlF = `<span style="${formulaStyle}">(${xBar}+2σₙ₋₁)</span>`;
+    lwlF = `<span style="${formulaStyle}">(${xBar}−2σₙ₋₁)</span>`;
+    lclF = `<span style="${formulaStyle}">(${xBar}−3σₙ₋₁)</span>`;
+  }
+  const chartRows = [
+    ['UCL'+uclF, stats.ucl!=null ? fmtVal(stats.ucl, stats.dec) : '–', '#ef5b5b'],
+    ['UWL'+uwlF, stats.uwl!=null ? fmtVal(stats.uwl, stats.dec) : '–', '#f0a84f'],
+    ['LWL'+lwlF, stats.lwl!=null ? fmtVal(stats.lwl, stats.dec) : '–', '#f0a84f'],
+    ['LCL'+lclF, stats.lcl!=null ? fmtVal(stats.lcl, stats.dec) : '–', '#ef5b5b'],
+    ['Doel', stats.doelWaarde!=null ? fmtVal(stats.doelWaarde, stats.dec) : '–', 'var(--muted)'],
+    ['Doel·bereik', stats.doelBereik!=null ? fmtVal(stats.doelBereik, stats.dec) : '–', 'var(--muted)'],
+    ['Doel·max', stats.doelBoven!=null ? fmtVal(stats.doelBoven, stats.dec) : '–', 'var(--muted)'],
+    ['Doel·min', stats.doelOnder!=null ? fmtVal(stats.doelOnder, stats.dec) : '–', 'var(--muted)'],
+  ];
+  function renderRows(rows){
+    return rows.map(([label,val,color],i)=>
+      `<tr style="background:${i%2? 'rgba(255,255,255,0.06)':'transparent'};"><td style="padding:8px 10px;color:var(--text);line-height:24px;">${label}</td><td style="padding:8px 10px;text-align:right;color:${color};line-height:24px;">${val}</td></tr>`
+    ).join('');
+  }
+  bodyStats.innerHTML = renderRows(statsRows);
+  bodyChart.innerHTML = renderRows(chartRows);
+  setStatsTab('stats');
+  document.getElementById('chart-stats-modal-overlay').style.display = 'flex';
+}
+function setStatsTab(tab){
+  document.getElementById('chart-stats-tabs').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.stattab===tab));
+  document.getElementById('chart-stats-table-stats').style.visibility = tab==='stats' ? 'visible' : 'hidden';
+  document.getElementById('chart-stats-table-stats').style.pointerEvents = tab==='stats' ? 'auto' : 'none';
+  document.getElementById('chart-stats-table-chart').style.visibility = tab==='chart' ? 'visible' : 'hidden';
+  document.getElementById('chart-stats-table-chart').style.pointerEvents = tab==='chart' ? 'auto' : 'none';
+}
+document.getElementById('chart-stats-tabs').querySelectorAll('button').forEach(btn=>{
+  btn.addEventListener('click', ()=>setStatsTab(btn.dataset.stattab));
+});
+(function(){
+  const box = document.querySelector('#chart-stats-modal-overlay .modal-box');
+  let startX=null, startY=null, tracking=false;
+  box.addEventListener('touchstart', (e)=>{
+    if(e.touches.length !== 1){ tracking=false; return; }
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+  }, {passive:true});
+  box.addEventListener('touchend', (e)=>{
+    if(!tracking || startX===null) return;
+    tracking = false;
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    if(Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const activeTab = document.getElementById('chart-stats-tabs').querySelector('button.active')?.dataset.stattab;
+    if(dx < 0 && activeTab === 'stats') setStatsTab('chart');
+    else if(dx > 0 && activeTab === 'chart') setStatsTab('stats');
+  }, {passive:true});
+})();
+document.getElementById('data-chart-canvas').addEventListener('click', openChartStatsModal);
+(function(){
+  const canvas = document.getElementById('data-chart-canvas');
+  let startX=null, startY=null, lastDx=0, lastDy=0;
+  canvas.addEventListener('touchstart', (e)=>{
+    if(e.touches.length !== 1){ startX=null; return; }
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    lastDx = 0; lastDy = 0;
+  }, {passive:true});
+  canvas.addEventListener('touchmove', (e)=>{
+    if(startX===null || e.touches.length!==1) return;
+    lastDx = e.touches[0].clientX - startX;
+    lastDy = e.touches[0].clientY - startY;
+  }, {passive:true});
+  canvas.addEventListener('touchend', ()=>{
+    if(startX===null) return;
+    const dx = lastDx, dy = lastDy;
+    const wasSwipe = Math.abs(dx) > 30 || Math.abs(dy) > 30;
+    const swipeDx = wasSwipe && Math.abs(dx) > Math.abs(dy) * 1.5 ? dx : 0;
+    const swipeDy = wasSwipe && Math.abs(dy) > Math.abs(dx) * 1.5 ? dy : 0;
+    if(wasSwipe && swipeDx !== 0){
+      const carousel = dataAggMode === 'd' ? ['standard','xmr','range'] : ['standard','range'];
+      const curIdx = carousel.indexOf(chartViewMode);
+      const startIdx = curIdx === -1 ? 0 : curIdx;
+      const dir = swipeDx < 0 ? 1 : -1; // links -> volgende (xmr/range eerst), rechts -> vorige
+      const nextIdx = (startIdx + dir + carousel.length) % carousel.length;
+      chartViewMode = carousel[nextIdx];
+      renderDataView();
+      window.chartSwipeJustHappened = true;
+      setTimeout(()=>{ window.chartSwipeJustHappened = false; }, 400);
+    } else if(wasSwipe && swipeDy < 0 && dataShowChart){
+      // omhoog vegen op de grafiek -> verbergen (alternatief voor de knop)
+      setDataShowChart(false);
+      window.chartSwipeJustHappened = true;
+      setTimeout(()=>{ window.chartSwipeJustHappened = false; }, 400);
+    }
+    startX = null;
+  }, {passive:true});
+})();
+(function(){
+  const panel = document.getElementById('data-filters-panel');
+  let startY=null, startX=null, panelLastDx=0, panelLastDy=0;
+  panel.addEventListener('touchstart', (e)=>{
+    if(e.touches.length !== 1){ startY=null; return; }
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    panelLastDx = 0; panelLastDy = 0;
+  }, {passive:true});
+  panel.addEventListener('touchmove', (e)=>{
+    if(startX===null || e.touches.length!==1) return;
+    panelLastDx = e.touches[0].clientX - startX;
+    panelLastDy = e.touches[0].clientY - startY;
+  }, {passive:true});
+  panel.addEventListener('touchend', ()=>{
+    if(startX===null) return;
+    const dx = panelLastDx, dy = panelLastDy;
+    const panelWasSwipe = Math.abs(dx) > 30 || Math.abs(dy) > 30;
+    const isHorizontal = panelWasSwipe && Math.abs(dx) > Math.abs(dy) * 1.5;
+    const isVertical = panelWasSwipe && Math.abs(dy) > Math.abs(dx) * 1.5;
+    const panelSwipeDx = isHorizontal ? dx : 0;
+    const panelSwipeDy = isVertical ? dy : 0;
+    if(panelWasSwipe && panelSwipeDx !== 0 && dataShowChart){
+      const carousel = dataAggMode === 'd' ? ['standard','xmr','range'] : ['standard','range'];
+      const curIdx = carousel.indexOf(chartViewMode);
+      const startIdx = curIdx === -1 ? 0 : curIdx;
+      const dir = panelSwipeDx < 0 ? 1 : -1; // links -> volgende (xmr/range eerst), rechts -> vorige
+      const nextIdx = (startIdx + dir + carousel.length) % carousel.length;
+      chartViewMode = carousel[nextIdx];
+      renderDataView();
+    } else if(panelWasSwipe && panelSwipeDy < 0 && dataShowChart){
+      setDataShowChart(false); // omhoog vegen -> grafiek verbergen
+    } else if(panelWasSwipe && panelSwipeDy > 0 && !dataShowChart){
+      setDataShowChart(true); // omlaag vegen -> grafiek weer tonen
+    }
+    startX = null; startY = null;
+  }, {passive:true});
+})();
+document.getElementById('chart-stats-modal-close').addEventListener('click', ()=>{
+  document.getElementById('chart-stats-modal-overlay').style.display = 'none';
+});
+document.getElementById('chart-stats-modal-overlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'chart-stats-modal-overlay') document.getElementById('chart-stats-modal-overlay').style.display = 'none';
+});
+
+function drawChart(ctx, canvas, points, mean, sigma, src, xMin, xMax, maxGapDays, rBar, chartMode, swipeEnabled, selectedKey, fullGroupSlots){
+  fullGroupSlots = fullGroupSlots || points;
+  maxGapDays = maxGapDays ?? 1;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 880, cssH = 220;
+  canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const pad = {left:54,right:16,top:34,bottom:36};
+  const plotW = cssW - pad.left - pad.right;
+  const plotH = cssH - pad.top - pad.bottom;
+
+  const dec = src?.decimalen ?? 1;
+  const n = points.length;
+  function drawOverlineChar(x, y, ch, color){
+    ctx.fillStyle = color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(ch, x, y);
+    const w = ctx.measureText(ch).width;
+    ctx.strokeStyle = color; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, y-14); ctx.lineTo(x+w, y-14); ctx.stroke();
+    return w;
+  }
+  const baseFont = '17px ui-monospace, monospace';
+  const valueFont = '700 19px ui-monospace, monospace';
+  ctx.font = baseFont;
+  const statY = 21;
+  let sx = cssW/2;
+  const isRange = chartMode === 'range';
+  const nForHeader = isRange ? Math.max(0, n-1) : n;
+  const nTxt = `n=${nForHeader}`;
+  const rBarValTxt = rBar!=null?fmtVal(rBar,dec):'–';
+  const rBarTxt = `=${rBarValTxt}`;
+  const gap = 18;
+  if(isRange){
+    // geen x̄ bij de Range-kaart, r̄ is hier de eigenlijke middellijn
+    ctx.font = baseFont;
+    const wN = ctx.measureText(nTxt).width;
+    const wRChar = ctx.measureText('r').width;
+    const wEq = ctx.measureText('=').width;
+    ctx.font = valueFont;
+    const wRVal = ctx.measureText(rBarValTxt).width;
+    const totalW = wN + gap + wRChar + wEq + wRVal;
+    sx = (cssW - totalW)/2;
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.font = baseFont;
+    ctx.fillStyle = '#e7edf0';
+    ctx.fillText(nTxt, sx, statY);
+    sx += wN + gap;
+    sx += drawOverlineChar(sx, statY, 'r', '#e7edf0');
+    ctx.fillStyle = '#e7edf0';
+    ctx.fillText('=', sx, statY);
+    sx += wEq;
+    ctx.font = valueFont;
+    ctx.fillStyle = '#4fd1c5';
+    ctx.fillText(rBarValTxt, sx, statY);
+  } else {
+    const xBarValTxt = mean!=null?fmtVal(mean,dec):'–';
+    const xBarTxt = `=${xBarValTxt}`;
+    ctx.font = baseFont;
+    const wN = ctx.measureText(nTxt).width;
+    const wXChar = ctx.measureText('x').width;
+    const wEq = ctx.measureText('=').width;
+    const wRChar = ctx.measureText('r').width;
+    const wRTxt = ctx.measureText(rBarTxt).width;
+    ctx.font = valueFont;
+    const wXVal = ctx.measureText(xBarValTxt).width;
+    const totalW = wN + gap + wXChar + wEq + wXVal + gap + wRChar + wRTxt;
+    sx = (cssW - totalW)/2;
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.font = baseFont;
+    ctx.fillStyle = '#e7edf0';
+    ctx.fillText(nTxt, sx, statY);
+    sx += wN + gap;
+    sx += drawOverlineChar(sx, statY, 'x', '#e7edf0');
+    ctx.fillStyle = '#e7edf0';
+    ctx.fillText('=', sx, statY);
+    sx += wEq;
+    ctx.font = valueFont;
+    ctx.fillStyle = '#4fd1c5';
+    ctx.fillText(xBarValTxt, sx, statY);
+    sx += wXVal + gap;
+    ctx.font = baseFont;
+    sx += drawOverlineChar(sx, statY, 'r', '#e7edf0');
+    ctx.fillStyle = '#e7edf0';
+    ctx.fillText(rBarTxt, sx, statY);
+  }
+  if(chartMode === 'xmr' || chartMode === 'range'){
+    ctx.font = '12px ui-monospace, monospace';
+    const badgeText = chartMode === 'xmr' ? 'XmR' : 'Range';
+    const textW = ctx.measureText(badgeText).width;
+    const padX = 7, padY = 4;
+    const boxW = textW + padX*2, boxH = 12 + padY*2;
+    const boxX = cssW - 4 - boxW, boxY = 4;
+    ctx.fillStyle = '#4f8ff0';
+    const r = 4;
+    ctx.beginPath();
+    ctx.moveTo(boxX+r, boxY);
+    ctx.arcTo(boxX+boxW, boxY, boxX+boxW, boxY+boxH, r);
+    ctx.arcTo(boxX+boxW, boxY+boxH, boxX, boxY+boxH, r);
+    ctx.arcTo(boxX, boxY+boxH, boxX, boxY, r);
+    ctx.arcTo(boxX, boxY, boxX+boxW, boxY, r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#eef4ff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(badgeText, boxX+boxW/2, boxY+boxH/2+1);
+  }
+
+  if(chartMode === 'range'){
+    const rangePts = [];
+    for(let i=1;i<points.length;i++){
+      rangePts.push({date: points[i].date, value: Math.abs(points[i].value - points[i-1].value)});
+    }
+    points = rangePts;
+    mean = rBar;
+    sigma = null;
+  }
+
+  const values = points.map(p=>p.value);
+  let yMin, yMax;
+  if(chartMode === 'xmr' && mean!==null && rBar!=null && rBar>0){
+    yMin = Math.min(...values, mean-3*rBar);
+    yMax = Math.max(...values, mean+3*rBar);
+  } else if(mean!==null && sigma>0){
+    yMin = Math.min(...values, mean-3.4*sigma);
+    yMax = Math.max(...values, mean+3.4*sigma);
+  } else if(chartMode === 'range'){
+    yMin = 0;
+    yMax = Math.max(...values, mean!=null ? mean*3.267 : 0);
+  } else {
+    yMin = Math.min(...values); yMax = Math.max(...values);
+    if(yMin===yMax){ yMin-=1; yMax+=1; }
+  }
+  if(chartMode !== 'range' && src?.doel_x != null && src?.doel_r != null){
+    yMin = Math.min(yMin, src.doel_x - src.doel_r/2);
+    yMax = Math.max(yMax, src.doel_x + src.doel_r/2);
+  }
+  const yPadAmt = (yMax-yMin)*0.08 || 1;
+  yMin -= yPadAmt; yMax += yPadAmt;
+  if(chartMode === 'range') yMin = Math.max(0, yMin);
+
+  const xSpan = Math.max(1, xMax - xMin);
+  const isAggregatedX = dataAggMode !== 'd' && fullGroupSlots.length > 1;
+  const xIndexMap = new Map();
+  if(isAggregatedX) fullGroupSlots.forEach((p,i)=>xIndexMap.set(p.date.getTime(), i));
+  function xPix(d){
+    if(isAggregatedX){
+      const t = d.getTime();
+      if(xIndexMap.has(t)) return pad.left + (xIndexMap.get(t)/(fullGroupSlots.length-1))*plotW;
+      // interpolatie voor tussenliggende (niet-punt) posities, bijv. het middelste as-label
+      const frac = (t - xMin.getTime())/xSpan;
+      return pad.left + frac*plotW;
+    }
+    return pad.left + ((d - xMin)/xSpan)*plotW;
+  }
+  function yPix(v){ return pad.top + (1 - (v-yMin)/(yMax-yMin))*plotH; }
+
+  ctx.strokeStyle = '#22292e'; ctx.lineWidth = 1;
+  const ySteps = 5;
+  ctx.font = '11px ui-monospace, monospace';
+  ctx.fillStyle = '#e7edf0';
+  for(let i=0;i<=ySteps;i++){
+    const v = yMin + (yMax-yMin)*i/ySteps;
+    const y = yPix(v);
+    ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(cssW-pad.right,y); ctx.stroke();
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(fmtVal(v, src?.decimalen), pad.left-8, y);
+  }
+  ctx.textBaseline='top';
+  ctx.font = '11px ui-monospace, monospace';
+  ctx.fillStyle = '#e7edf0';
+  const xAxisLabel = (d) => fmtGroupLabel(d, dataAggMode, dateToKey(d));
+  function drawDateLabel(d, x, align){
+    ctx.textAlign = align;
+    ctx.fillStyle = '#e7edf0';
+    ctx.fillText(xAxisLabel(d), x, cssH-pad.bottom+11);
+  }
+  let leftLabelX, rightLabelX;
+  if(isAggregatedX){
+    const firstP = fullGroupSlots[0], lastP = fullGroupSlots[fullGroupSlots.length-1];
+    const midDate = new Date(firstP.date.getTime() + (lastP.date.getTime()-firstP.date.getTime())*0.5);
+    leftLabelX = pad.left; rightLabelX = cssW-pad.right;
+    drawDateLabel(firstP.date, leftLabelX, 'left');
+    drawDateLabel(midDate, pad.left + plotW*0.5, 'center');
+    drawDateLabel(lastP.date, rightLabelX, 'right');
+  } else {
+    leftLabelX = pad.left; rightLabelX = cssW-pad.right;
+    drawDateLabel(new Date(xMin.getTime()), leftLabelX, 'left');
+    drawDateLabel(new Date(xMin.getTime() + xSpan*0.5), pad.left + plotW*0.5, 'center');
+    drawDateLabel(new Date(xMin.getTime() + xSpan), rightLabelX, 'right');
+  }
+
+  // Horizontale balk, precies zo breed als één periode-slot (één dag/week/maand/etc.),
+  // op een eigen dunne regel boven de datumlabels — laat zien welk deel van de grafiek
+  // bij de huidige (nog lopende) periode hoort.
+  const todayForChart = new Date();
+  const todayUTCForChart = new Date(Date.UTC(todayForChart.getFullYear(), todayForChart.getMonth(), todayForChart.getDate()));
+  let slotCenter = null, slotWidth = null;
+  if(dataAggMode === 'd'){
+    if(todayUTCForChart >= xMin && todayUTCForChart <= xMax){
+      slotCenter = xPix(todayUTCForChart);
+      slotWidth = (24*60*60*1000/xSpan)*plotW;
+    }
+  } else if(isAggregatedX){
+    const groupFnForChart = dataAggMode==='w' ? getWeekStart : dataAggMode==='m' ? getMonthStart : dataAggMode==='q' ? getQuarterStart : getYearStart;
+    const currentEndDate = getGroupEnd(groupFnForChart(todayUTCForChart), dataAggMode, todayUTCForChart);
+    const firstT = fullGroupSlots[0].date.getTime(), lastT = fullGroupSlots[fullGroupSlots.length-1].date.getTime();
+    if(currentEndDate.getTime() >= firstT && currentEndDate.getTime() <= lastT){
+      const frac = (currentEndDate.getTime() - firstT) / Math.max(1, lastT - firstT);
+      slotCenter = pad.left + frac*plotW;
+      slotWidth = fullGroupSlots.length>1 ? plotW/(fullGroupSlots.length-1) : plotW;
+    }
+  }
+  if(slotCenter != null){
+    const barY = pad.top + plotH + 3;
+    const barH = 2;
+    let barX = slotCenter - slotWidth/2;
+    let barW = slotWidth;
+    // binnen de grafiekbreedte houden, met behoud van de volledige breedte (positie verschuiven i.p.v. afkappen)
+    if(barX < pad.left) barX = pad.left;
+    if(barX + barW > cssW-pad.right) barX = (cssW-pad.right) - barW;
+    if(barX < pad.left){ barX = pad.left; barW = (cssW-pad.right) - pad.left; }
+    ctx.fillStyle = '#4fd1c5';
+    ctx.fillRect(barX, barY, Math.max(2,barW), barH);
+  }
+
+  function hLine(v, color, dash){
+    const y = yPix(v);
+    ctx.strokeStyle = color; ctx.setLineDash(dash||[]); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(cssW-pad.right,y); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if(mean!==null){
+    if(chartMode === 'range'){
+      hLine(mean*3.267, '#ef5b5b', [5,4]); // D4=3,267 (bewegende spreiding, n=2)
+    } else if(chartMode === 'xmr' && rBar!=null && rBar>0){
+      hLine(mean+2.66*rBar, '#ef5b5b', [5,4]);
+      hLine(mean+1.77*rBar, '#f0a84f', [5,4]);
+      hLine(mean-1.77*rBar, '#f0a84f', [5,4]);
+      hLine(mean-2.66*rBar, '#ef5b5b', [5,4]);
+    } else if(sigma>0){
+      hLine(mean+3*sigma, '#ef5b5b', [5,4]);
+      hLine(mean+2*sigma, '#f0a84f', [5,4]);
+      hLine(mean-2*sigma, '#f0a84f', [5,4]);
+      hLine(mean-3*sigma, '#ef5b5b', [5,4]);
+    }
+    hLine(mean, '#4fd1c5', []);
+  }
+  if(chartMode !== 'range' && src?.doel_x != null && src?.doel_r != null){
+    const top = yPix(src.doel_x + src.doel_r/2);
+    const bottom = yPix(src.doel_x - src.doel_r/2);
+    ctx.fillStyle = 'rgba(159,216,224,0.08)';
+    ctx.fillRect(pad.left, top, plotW, bottom-top);
+    hLine(src.doel_x + src.doel_r/2, '#6f8890', [2,3]);
+    hLine(src.doel_x - src.doel_r/2, '#6f8890', [2,3]);
+  }
+  if(chartMode !== 'range' && src?.doel_x != null) hLine(src.doel_x, '#8a99a1', [2,3]);
+
+  const showDots = !(src?.puntjes_drempel != null && points.length > src.puntjes_drempel);
+  if(points.length>1){
+    ctx.strokeStyle = showDots ? '#5c6f79' : '#9fd8e0'; ctx.lineWidth = 1.8; ctx.beginPath();
+    const oneDayMs = 24*60*60*1000;
+    points.forEach((p,i)=>{
+      const x=xPix(p.date), y=yPix(p.value);
+      if(i===0){
+        ctx.moveTo(x,y);
+      } else {
+        const gapDays = (p.date - points[i-1].date) / oneDayMs;
+        if(gapDays > maxGapDays) ctx.moveTo(x,y);
+        else ctx.lineTo(x,y);
+      }
+    });
+    ctx.stroke();
+  }
+
+  let selectedPoint = null;
+  const dotsByColor = new Map(); // kleur -> array van {x,y}, zodat we per kleur in één keer kunnen tekenen
+  points.forEach(p=>{
+    const x=xPix(p.date), y=yPix(p.value);
+    let color = '#9fd8e0';
+    if(chartMode === 'range' && mean!==null){
+      if(p.value > mean*3.267) color = '#ef5b5b';
+    } else if(chartMode === 'xmr' && mean!==null && rBar!=null && rBar>0){
+      const dist = Math.abs(p.value-mean);
+      if(dist > 2.66*rBar) color = '#ef5b5b';
+      else if(dist > 1.77*rBar) color = '#f0a84f';
+    } else if(mean!==null && sigma>0){
+      const dist = Math.abs(p.value-mean);
+      if(dist > 3*sigma) color = '#ef5b5b';
+      else if(dist > 2*sigma) color = '#f0a84f';
+    }
+    const isSelected = selectedKey && dateToKey(p.date) === selectedKey;
+    if(isSelected){ selectedPoint = {x,y,color}; return; } // apart, als laatste, tekenen
+    if(!dotsByColor.has(color)) dotsByColor.set(color, []);
+    dotsByColor.get(color).push({x,y});
+  });
+  if(showDots){
+    dotsByColor.forEach((pts, color)=>{
+      ctx.beginPath();
+      pts.forEach(({x,y})=>{ ctx.moveTo(x+3.4, y); ctx.arc(x,y,3.4,0,Math.PI*2); });
+      ctx.fillStyle = color;
+      ctx.fill();
+    });
+  }
+  if(selectedPoint){
+    const {x,y,color} = selectedPoint;
+    ctx.beginPath(); ctx.arc(x,y,3.4,0,Math.PI*2); ctx.fillStyle = color; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x-8, y-17);
+    ctx.lineTo(x+8, y-17);
+    ctx.lineTo(x, y-5);
+    ctx.closePath();
+    ctx.fillStyle = '#4fd1c5';
+    ctx.fill();
+    ctx.strokeStyle = '#4f8ff0';
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+  } else if(selectedKey && mean!=null){
+    // geselecteerde rij heeft geen meting: driehoekje op de juiste datum, wijzend naar het gemiddelde
+    const selDate = keyToDate(selectedKey);
+    if(selDate >= xMin && selDate <= xMax){
+      const x = xPix(selDate), y = yPix(mean);
+      ctx.beginPath();
+      ctx.moveTo(x-8, y-17);
+      ctx.lineTo(x+8, y-17);
+      ctx.lineTo(x, y-5);
+      ctx.closePath();
+      ctx.fillStyle = '#4fd1c5';
+      ctx.fill();
+      ctx.strokeStyle = '#4f8ff0';
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+    }
+  }
+
+  if(swipeEnabled){
+    const midY = pad.top + plotH/2;
+    ctx.fillStyle = '#4f8ff0';
+    ctx.beginPath();
+    ctx.moveTo(6, midY-6); ctx.lineTo(6, midY+6); ctx.lineTo(0, midY); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cssW-6, midY-6); ctx.lineTo(cssW-6, midY+6); ctx.lineTo(cssW, midY); ctx.closePath(); ctx.fill();
+  }
+}
+
+/* ================= Virtuele tabelrendering =================
+   Rendert bij lange lijsten alleen de rijen die daadwerkelijk in beeld
+   (kunnen) zijn, plus een buffer, met lege spacer-rijen erboven/eronder
+   om de scrollbalk correct te laten voelen. Voorkomt dat duizenden
+   <tr>-elementen tegelijk in de DOM staan. */
+let measuredRowHeight = null;
+function getRowHeight(tbody){
+  if(measuredRowHeight) return measuredRowHeight;
+  const test = document.createElement('tr');
+  test.innerHTML = '<td>0</td><td>0</td><td class="actions-cell"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="19" x2="12" y2="5"/></svg>0</td>';
+  tbody.appendChild(test);
+  measuredRowHeight = test.offsetHeight || 44;
+  tbody.removeChild(test);
+  return measuredRowHeight;
+}
+
+const virtualTableState = new Map(); // scrollElId -> {scrollHandler}
+
+function setupVirtualTable(scrollElId, tbodyId, rowsHtml, onRender){
+  const scrollEl = document.getElementById(scrollElId);
+  const tbody = document.getElementById(tbodyId);
+  if(!scrollEl || !tbody) return;
+
+  const prev = virtualTableState.get(scrollElId);
+  if(prev){ scrollEl.removeEventListener('scroll', prev.scrollHandler); }
+
+  const rowHeight = getRowHeight(tbody);
+  const total = rowsHtml.length;
+  const BUFFER = 8;
+
+  function renderWindow(){
+    const viewH = scrollEl.clientHeight || 300;
+    let startIndex = Math.max(0, Math.floor(scrollEl.scrollTop / rowHeight) - BUFFER);
+    const visibleCount = Math.ceil(viewH / rowHeight) + BUFFER*2;
+    const endIndex = Math.min(total, startIndex + visibleCount);
+    const topH = startIndex * rowHeight;
+    const bottomH = (total - endIndex) * rowHeight;
+
+    let html = '';
+    if(topH>0) html += `<tr aria-hidden="true" style="height:${topH}px;"><td colspan="3" style="padding:0;border:0;"></td></tr>`;
+    for(let i=startIndex;i<endIndex;i++) html += rowsHtml[i];
+    if(bottomH>0) html += `<tr aria-hidden="true" style="height:${bottomH}px;"><td colspan="3" style="padding:0;border:0;"></td></tr>`;
+    tbody.innerHTML = html;
+    if(onRender) onRender(tbody);
+  }
+
+  const scrollHandler = ()=>{ window.requestAnimationFrame(renderWindow); };
+  scrollEl.addEventListener('scroll', scrollHandler, {passive:true});
+  virtualTableState.set(scrollElId, {scrollHandler});
+  renderWindow();
+}
+
+/* Berekent voor een tabel-scrollbox precies hoeveel ruimte er nog over is
+   tot de onderkant van het scrollbare middengebied, i.p.v. een geschatte
+   vh-waarde te gebruiken. */
+function fitTableScrollHeight(id){
+  const el = document.getElementById(id);
+  if(!el || el.offsetParent === null) return; // niet zichtbaar, niets te doen
+  const navEl = document.querySelector('nav.tabs');
+  const mainEl = document.querySelector('main');
+  const navH = navEl ? navEl.getBoundingClientRect().height : 0;
+  const mainPadBottom = mainEl ? parseFloat(getComputedStyle(mainEl).paddingBottom) || 0 : 0;
+  const tableTop = el.getBoundingClientRect().top;
+  const remaining = window.innerHeight - navH - tableTop - mainPadBottom - 2; // main's eigen bodem-padding moet ná de tabel nog passen
+  el.style.maxHeight = Math.max(160, Math.floor(remaining)) + 'px';
+}
+function fitVisibleTableScrollBoxes(){
+  fitTableScrollHeight('data-table-scroll');
+}
+window.addEventListener('resize', fitVisibleTableScrollBoxes);
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', fitVisibleTableScrollBoxes);
+}
+
+/* Zorgt dat een gefocust invoerveld in een modal zichtbaar blijft
+   zodra het toetsenbord opengaat (voorkomt dat het veld erachter verdwijnt). */
+function scrollFocusedIntoView(){
+  const el = document.activeElement;
+  if(!el || !(el.tagName==='INPUT' || el.tagName==='SELECT')) return;
+  if(!el.closest('.modal-overlay')) return;
+  el.scrollIntoView({block:'center', behavior:'smooth'});
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', ()=>{
+    setTimeout(scrollFocusedIntoView, 50);
+  });
+}
+document.addEventListener('focusin', (e)=>{
+  if(e.target.closest('.modal-overlay')){
+    setTimeout(scrollFocusedIntoView, 300);
+  }
+});
+
+/* ================= boot ================= */
+if(!supportsFSA){
+  document.getElementById('unsupported-banner').style.display = 'block';
+  document.getElementById('btn-open-dir').disabled = true;
+} else {
+  bootDir();
+}
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(e=>console.error('SW registratie mislukt', e));
+  });
+}
+</script>
+</body>
+</html>
