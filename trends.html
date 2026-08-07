@@ -2671,7 +2671,7 @@ document.getElementById('btn-add-datapoint').addEventListener('click', async ()=
     showAlert(`Deze bron staat maximaal ${dec} decima${dec===1?'al':'len'} toe.`);
     return;
   }
-  const willOverwrite = newKey !== editingDataKey && dataCache[id][newKey] != null;
+  const willOverwrite = editingDataKey === null && dataCache[id][newKey] != null;
   if(willOverwrite){
     const ok = await showConfirm(`Er bestaat al een meting op ${fmtDateNL(newKey)} (${fmtVal(dataCache[id][newKey], dec)} ${src?.eenheid||''}). Wil je die overschrijven?`, 'Overschrijven');
     if(!ok) return;
