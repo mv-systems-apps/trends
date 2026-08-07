@@ -2195,14 +2195,14 @@ function collapseGapRuns(keysDesc, htmlArr, hasValueFn, unitLabel){
   }
   return result;
 }
-async function renderDataView(){
+async function renderDataView(keepSelection){
   const id = document.getElementById('data-source-select').value;
   updateDataControlsEnabled();
   if(id) updateDataAggButtonStates();
   const tbody = document.getElementById('data-table-body');
   const emptyEl = document.getElementById('data-empty');
-  tbody.innerHTML = '';
   if(!id){
+    tbody.innerHTML = '';
     emptyEl.style.display='block';
     emptyEl.textContent = 'Kies eerst een bron.';
     return;
@@ -2223,7 +2223,7 @@ async function renderDataView(){
   let keys = Object.keys(data).sort().reverse();
   const keysAsc = keys.slice().reverse();
   let shown = getShownDataKeys(keys);
-  selectedDataKey = null;
+  if(!keepSelection) selectedDataKey = null;
   updateEditSelectedButton();
 
   let rowsHtml;
@@ -2652,7 +2652,8 @@ document.getElementById('btn-add-datapoint').addEventListener('click', async ()=
     delete dataCache[id][newKey];
     await syncDataFile(id);
     closeDatapointModal();
-    renderDataView();
+    selectedDataKey = newKey;
+    renderDataView(true);
     return;
   }
 
@@ -2684,7 +2685,8 @@ document.getElementById('btn-add-datapoint').addEventListener('click', async ()=
   dataCache[id][newKey] = num;
   await syncDataFile(id);
   closeDatapointModal();
-  renderDataView();
+  selectedDataKey = newKey;
+  renderDataView(true);
 });
 
 const PERIOD_DAYS = {'1w':7,'1m':31,'3m':91,'6m':182,'9m':273,'1y':365,'5y':1826,'all':null};
