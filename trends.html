@@ -686,11 +686,13 @@
 <script>
 /* ================= IndexedDB: bewaart bestandskoppelingen (FileSystemFileHandle) tussen sessies ================= */
 const DB_NAME = 'controlekaart-db', STORE = 'handles';
+let __idbConnection = null;
 function idbOpen(){
+  if(__idbConnection) return Promise.resolve(__idbConnection);
   return new Promise((resolve,reject)=>{
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = ()=>{ req.result.createObjectStore(STORE); };
-    req.onsuccess = ()=>resolve(req.result);
+    req.onsuccess = ()=>{ __idbConnection = req.result; resolve(req.result); };
     req.onerror = ()=>reject(req.error);
   });
 }
