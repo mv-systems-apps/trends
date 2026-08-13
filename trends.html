@@ -66,6 +66,9 @@
   .panel h2{margin:0 0 12px;font-size:24px;letter-spacing:.02em;color:var(--text);}
   tr:nth-child(even) td{background:rgba(255,255,255,0.06);}
   tr.gap-summary-row td{background:rgba(255,255,255,0.03);font-style:italic;}
+  tr.submeting-row td{background:rgba(79,209,197,0.05);font-size:17px;}
+  tr.punt-row td:first-child{white-space:nowrap;}
+  tr.add-submeting-row td{background:rgba(79,209,197,0.05);font-style:italic;}
   tr.gap-summary-row:active td{background:rgba(79,209,197,0.12);}
   tr.gap-collapse-row td{background:rgba(255,255,255,0.03);font-style:italic;}
   tr.gap-collapse-row:active td{background:rgba(79,209,197,0.12);}
@@ -359,6 +362,12 @@
           </button>
         </div>
         <div class="field" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+          <label style="margin:0;">&gt;1 meting per dag</label>
+          <button type="button" class="toggle-switch" id="f-meerdere-metingen" title=">1 meting per dag (standaard uit)" aria-label=">1 meting per dag">
+            <span class="toggle-switch-knob"></span>
+          </button>
+        </div>
+        <div class="field" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
           <label style="margin:0;">Grafiek tonen</label>
           <button type="button" class="toggle-switch" id="f-toon-grafiek" title="Grafiek tonen (standaard aan)" aria-label="Grafiek tonen">
             <span class="toggle-switch-knob"></span>
@@ -474,6 +483,7 @@
     <div class="panel" id="data-filters-panel" style="margin-top:0;margin-bottom:4px;display:flex;flex-direction:column;gap:8px;touch-action:pan-y;">
       <div style="display:flex;align-items:stretch;gap:8px;">
         <div class="segmented" id="data-agg-filter" style="flex:1;margin-bottom:0;">
+          <button data-agg="p" style="display:none;">tijd</button>
           <button data-agg="d" class="active">dag</button>
           <button data-agg="w">week</button>
           <button data-agg="m">1 mnd</button>
@@ -615,7 +625,10 @@
               <span id="f-data-date-todaybar" style="display:none;width:4px;height:16px;background:var(--accent);border-radius:2px;margin-right:6px;"></span>
               <span id="f-data-date-dayname" style="color:var(--text);font-family:var(--mono);font-size:15px;"></span>
             </div>
-            <div id="f-data-date-display" style="font-family:var(--mono);font-size:21px;color:var(--text);padding:13px 14px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;"></div>
+            <div id="f-data-date-display" style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:21px;color:var(--text);padding:13px 14px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;">
+              <span id="f-data-date-text"></span>
+              <input type="time" id="f-data-time" style="display:none;margin-left:auto;background:var(--panel);border:1px solid var(--line);color:var(--text);font-family:var(--mono);font-size:17px;padding:6px 8px;border-radius:6px;width:auto;">
+            </div>
           </div>
           <div class="field">
             <label style="display:flex;align-items:center;justify-content:space-between;">
@@ -747,11 +760,23 @@ async function readJsonFromDir(name){
     throw e;
   }
 }
+let __pendingWrites = 0;
+const __writeChain = new Map(); // bestandsnaam -> laatste schrijfbelofte, zodat schrijfacties nooit overlappen
 async function writeJsonToDir(name, obj){
-  await maybeBackupFile(name);
-  const handle = await dirHandle.getFileHandle(name, {create:true});
-  await writeHandleJson(handle, obj);
+  __pendingWrites++;
+  const prev = __writeChain.get(name) || Promise.resolve();
+  const run = prev.catch(()=>{}).then(async ()=>{
+    await maybeBackupFile(name);
+    const handle = await dirHandle.getFileHandle(name, {create:true});
+    await writeHandleJson(handle, obj);
+  });
+  __writeChain.set(name, run.catch(()=>{}));
+  try{ await run; }
+  finally{ __pendingWrites--; }
 }
+window.addEventListener('beforeunload', (e)=>{
+  if(__pendingWrites > 0){ e.preventDefault(); e.returnValue = ''; } // nog niet weggeschreven wijzigingen
+});
 
 function backupFilename(name){
   const dot = name.lastIndexOf('.');
@@ -803,9 +828,85 @@ function uniqueId(base){
   while(bronnen.some(b=>b.id===id && b.id!==editingId)){ id = slugify(base)+'_'+(++n); }
   return id;
 }
-function keyToDate(k){ return new Date(Date.UTC(+k.slice(0,4), +k.slice(4,6)-1, +k.slice(6,8))); }
+function keyToDate(k){
+  const m = k.match(/^D?(\d{4})(\d{2})(\d{2})/); // 'D'-voorvoegsel optioneel (nieuw formaat), tijd-suffix wordt genegeerd
+  return new Date(Date.UTC(+m[1], +m[2]-1, +m[3]));
+}
+function keysForSameDay(data, key){
+  // alle opgeslagen sleutels die op dezelfde kalenderdag vallen (ongeacht tijd-deel)
+  const day = dateToKey(keyToDate(key));
+  return Object.keys(data).filter(k => dateToKey(keyToDate(k)) === day);
+}
+function composeKeyWithTime(baseKey, timeInputValue){
+  const dateStr = dateToKey(keyToDate(baseKey)); // YYYYMMDD, zonder D-voorvoegsel
+  const hhmm = timeInputValue ? timeInputValue.replace(':','') : '1200'; // leeg wordt vóór opslaan al geblokkeerd; 1200 is enkel een vangnet
+  return 'D'+dateStr+'T'+hhmm;
+}
+function keyToTimeMinutes(k){
+  const m = k.match(/T(\d{2})(\d{2})$/); // alleen aanwezig bij nieuw formaat mét tijd
+  return m ? (+m[1])*60 + (+m[2]) : 720; // terugval: 12:00 (schil voor tijdloze/oude sleutels)
+}
+function getFlatEntries(data){
+  // platte, chronologisch gesorteerde lijst van alle individuele metingen (sleutel + datum + tijd + waarde),
+  // ongeacht dag-grenzen — de basis voor zowel het 'losse metingen'-niveau als de bestaande aggregatie
+  return Object.keys(data).map(k=>({
+    key: k,
+    date: keyToDate(k),
+    minutes: keyToTimeMinutes(k),
+    value: data[k]
+  })).sort((a,b)=> a.date - b.date || a.minutes - b.minutes);
+}
+function aggregateDayValue(entries){
+  // vat de metingen van één dag samen tot één waarde (gemiddelde) — consistent met hoe
+  // aggregatePoints() week/maand/kwartaal/jaar nu al samenvat
+  if(!entries.length) return null;
+  return entries.reduce((s,e)=>s+e.value,0)/entries.length;
+}
+function getDailyFromFlat(flat){
+  // 'dag' als gewone groepering, net als aggregatePoints() dat voor week/maand/kwartaal/jaar doet:
+  // groepeert de platte metingenlijst per kalenderdag en vat elke dag samen tot één waarde.
+  // Bij precies 1 meting op een dag is dat per definitie exact die ene waarde (gemiddelde van 1 getal).
+  const dayGroups = new Map(); // dag (ms sinds epoch, middernacht UTC) -> entries[]
+  flat.forEach(e=>{
+    const dayKey = e.date.getTime(); // keyToDate() geeft al middernacht UTC van de juiste dag
+    if(!dayGroups.has(dayKey)) dayGroups.set(dayKey, []);
+    dayGroups.get(dayKey).push(e);
+  });
+  return Array.from(dayGroups.entries())
+    .sort((a,b)=>a[0]-b[0])
+    .map(([t,entries])=>({date: new Date(t), value: aggregateDayValue(entries), count: entries.length, entries}));
+}
+
+/* Afgeleide data (platte lijst + dag-aggregatie) wordt per bron één keer berekend en hergebruikt
+   zolang de onderliggende metingen niet wijzigen. Alle mutaties lopen via setMeting/deleteMeting,
+   die de versie ophogen — zo kan de cache niet verouderen doordat ergens een invalidatie ontbreekt.
+   De teruggegeven arrays zijn read-only: gebruik filter/map/slice, muteer ze niet. */
+const dataVersion = {};          // bron-id -> versieteller
+const derivedCache = new Map();  // bron-id -> {version, flat, daily}
+function bumpDataVersion(id){ dataVersion[id] = (dataVersion[id] || 0) + 1; }
+function setMeting(id, key, value){
+  dataCache[id] = dataCache[id] || {};
+  dataCache[id][key] = value;
+  bumpDataVersion(id);
+}
+function deleteMeting(id, key){
+  if(dataCache[id]) delete dataCache[id][key];
+  bumpDataVersion(id);
+}
+function getDerivedData(id){
+  const version = dataVersion[id] || 0;
+  const hit = derivedCache.get(id);
+  if(hit && hit.version === version) return hit;
+  const flat = getFlatEntries(dataCache[id] || {});
+  const entry = {version, flat, daily: getDailyFromFlat(flat)};
+  derivedCache.set(id, entry);
+  return entry;
+}
 function dateToKey(d){ return d.getUTCFullYear().toString() + String(d.getUTCMonth()+1).padStart(2,'0') + String(d.getUTCDate()).padStart(2,'0'); }
-function fmtDateNL(k){ return k.slice(6,8)+'-'+k.slice(4,6)+'-'+k.slice(0,4); }
+function fmtDateNL(k){
+  const m = k.match(/^D?(\d{4})(\d{2})(\d{2})/);
+  return m[3]+'-'+m[2]+'-'+m[1];
+}
 function getISOWeek(date){
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -844,9 +945,31 @@ function fmtValPlain(v, dec){ return Number(v).toFixed(dec ?? 1); } // voor invo
 function getSource(id){ return bronnen.find(b=>b.id===id); }
 function numOrNull(v){ return v===''||v===null||v===undefined ? null : Number(v); }
 function escapeHtml(s){ return (s??'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function keyToIsoDate(k){ return k.slice(0,4)+'-'+k.slice(4,6)+'-'+k.slice(6,8); }
+function keyToIsoDate(k){
+  const m = k.match(/^D?(\d{4})(\d{2})(\d{2})/);
+  return m[1]+'-'+m[2]+'-'+m[3];
+}
 function isoToKey(iso){ return iso.replace(/-/g,''); }
 function metaFileObj(){ return { bronnen: bronnen.map(({id, ...rest})=>rest) }; }
+function normalizeDataKeys(data, src){
+  // Brengt sleutels naar het huidige formaat: altijd 'D'-voorvoegsel, en bij een tijd-bron
+  // ook altijd een tijd-deel (ontbrekende tijd -> T1200, de waarde waarmee toch al gerekend werd).
+  // Het bestand zelf migreert hierdoor bij de eerstvolgende schrijfactie.
+  const withTime = !!src?.meerdere_metingen;
+  const out = {};
+  const dropped = [];
+  // aflopend sorteren zet 'D...T1200' vóór 'D...' , zodat een al bestaande expliciete tijd wint
+  Object.keys(data).sort().reverse().forEach(k=>{
+    let nk = /^D/.test(k) ? k : 'D'+k;
+    if(withTime && !/T\d{4}$/.test(nk)) nk = nk+'T1200';
+    if(Object.prototype.hasOwnProperty.call(out, nk)){
+      dropped.push(k); // botsing: er stond al een meting op dit exacte tijdstip
+      return;
+    }
+    out[nk] = data[k];
+  });
+  return {data: out, dropped};
+}
 function dataFileObj(data){
   const o={};
   Object.keys(data).sort().forEach(k=>{
@@ -942,6 +1065,7 @@ async function loadMetaFromDir(){
       standaard_bereik: item.standaard_bereik || '1m',
       toon_grafiek: item.toon_grafiek !== false,
       duizendtal: item.duizendtal === true,
+      meerdere_metingen: item.meerdere_metingen === true,
       puntjes_drempel: item.puntjes_drempel ?? null,
       standaard_groepering: item.standaard_groepering || 'd'
     };
@@ -1238,6 +1362,7 @@ function snapshotSourceForm(){
     doelr: document.getElementById('f-doelr').value,
     toonGrafiek: formToonGrafiek,
     duizendtal: formDuizendtal,
+    meerdereMetingen: formMeerdereMetingen,
     puntjesDrempel: document.getElementById('f-puntjes-drempel').value,
     groepering: formStandaardGroepering,
     bereik: formStandaardBereik
@@ -1281,6 +1406,7 @@ function editSource(id){
   document.getElementById('f-doelr').value = b.doel_r ?? '';
   setFormToonGrafiek(b.toon_grafiek !== false);
   setFormDuizendtal(b.duizendtal === true);
+  setFormMeerdereMetingen(b.meerdere_metingen === true);
   document.getElementById('f-puntjes-drempel').value = b.puntjes_drempel ?? '';
   setFormStandaardGroepering(b.standaard_groepering || 'd');
   setFormStandaardBereik(b.standaard_bereik || '1m');
@@ -1300,6 +1426,14 @@ function setFormDuizendtal(show){
 }
 document.getElementById('f-duizendtal').addEventListener('click', ()=>{
   setFormDuizendtal(!formDuizendtal);
+});
+let formMeerdereMetingen = false;
+function setFormMeerdereMetingen(show){
+  formMeerdereMetingen = show;
+  document.getElementById('f-meerdere-metingen').classList.toggle('active', show);
+}
+document.getElementById('f-meerdere-metingen').addEventListener('click', ()=>{
+  setFormMeerdereMetingen(!formMeerdereMetingen);
 });
 document.getElementById('f-toon-grafiek').addEventListener('click', ()=>{
   setFormToonGrafiek(!formToonGrafiek);
@@ -1501,6 +1635,7 @@ function resetSourceForm(){
   autoResizeBestandField();
   setFormToonGrafiek(true);
   setFormDuizendtal(false);
+  setFormMeerdereMetingen(false);
   setFormStandaardGroepering('d');
   setFormStandaardBereik('1m');
   document.getElementById('btn-delete-source').style.display = 'none';
@@ -1529,6 +1664,7 @@ document.getElementById('btn-save-source').addEventListener('click', async ()=>{
     standaard_bereik: formStandaardBereik,
     toon_grafiek: formToonGrafiek,
     duizendtal: formDuizendtal,
+    meerdere_metingen: formMeerdereMetingen,
     puntjes_drempel: numOrNull(document.getElementById('f-puntjes-drempel').value.trim()),
     standaard_groepering: formStandaardGroepering
   };
@@ -1658,6 +1794,8 @@ async function deleteSource(id){
   bronnen = bronnen.filter(x=>x.id!==id);
   await syncMetaFile();
   delete dataCache[id];
+  bumpDataVersion(id);
+  derivedCache.delete(id);
   delete dataFileExists[id];
   renderSourceList();
   renderSourceSelects();
@@ -1758,9 +1896,14 @@ async function ensureDataLoaded(id){
   if(!src || !dirHandle){ return; }
   try{
     const json = await readJsonFromDir(src.bestand);
-    dataCache[id] = json ? dataFileObj(json) : {};
+    const norm = normalizeDataKeys(json ? dataFileObj(json) : {}, src);
+    dataCache[id] = norm.data;
+    bumpDataVersion(id);
     dataFileExists[id] = !!json;
-  }catch(e){ console.error('data lezen mislukt', e); dataCache[id] = {}; }
+    if(norm.dropped.length){
+      showAlert(`In ${src.bestand} vielen ${norm.dropped.length} meting(en) samen met een al bestaande meting op hetzelfde tijdstip; die zijn niet overgenomen. De oorspronkelijke versie staat nog in de back-up.`);
+    }
+  }catch(e){ console.error('data lezen mislukt', e); dataCache[id] = {}; bumpDataVersion(id); }
 }
 
 document.getElementById('data-source-select').addEventListener('change', async ()=>{
@@ -1864,7 +2007,7 @@ function syncPeriodButtonsActive(){
   });
   updatePeriodCustomIcon();
 }
-const AGG_DAYS = {d:1, w:7, m:30, q:91, y:365};
+const AGG_DAYS = {p:1, d:1, w:7, m:30, q:91, y:365};
 function getDataPeriodDaysForFilter(){
   if(dataPeriodFilter==='custom'){
     const fromIso = document.getElementById('data-range-from').value;
@@ -1878,13 +2021,21 @@ function getDataPeriodDaysForFilter(){
 function updateDataAggButtonStates(){
   const periodDays = getDataPeriodDaysForFilter();
   const buttons = document.getElementById('data-agg-filter').querySelectorAll('button');
+  const curSrc = getSource(document.getElementById('data-source-select').value);
+  const showPunten = !!curSrc?.meerdere_metingen;
   buttons.forEach(btn=>{
     const agg = btn.dataset.agg;
+    if(agg === 'p'){
+      btn.style.display = showPunten ? '' : 'none';
+      btn.disabled = false; // 'punten' is het fijnste niveau: nooit te weinig groepen
+      return;
+    }
     const disable = agg!=='d' && periodDays!=null && periodDays < AGG_DAYS[agg];
     btn.disabled = disable;
   });
+  if(dataAggMode === 'p' && !showPunten) dataAggMode = 'd'; // bron zonder tijd-metingen: terug naar dag
   const activeBtn = document.getElementById('data-agg-filter').querySelector('button.active');
-  if(activeBtn && activeBtn.disabled){
+  if((activeBtn && activeBtn.disabled) || (dataAggMode === 'd' && activeBtn?.dataset.agg === 'p')){
     dataAggMode = 'd';
     buttons.forEach(b=>b.classList.toggle('active', b.dataset.agg==='d'));
   }
@@ -2106,20 +2257,23 @@ function updateTableColumnWidths(rowsHtmlArr){
   rowsHtmlArr.forEach(html=>{
     const valMatch = html.match(/<td class="val"[^>]*>(.*?)<\/td>/s);
     if(!valMatch) return; // samenvouw-rij o.i.d., niet relevant
-    const valText = valMatch[1].replace(/<[^>]+>/g,'').trim();
-    if(valText === '–' || valText === '') return; // 'geen meting', telt niet mee
+    const valTextRaw = valMatch[1].replace(/<[^>]+>/g,'').trim();
+    const isEmptyVal = valTextRaw === '–' || valTextRaw === '';
     const dateMatch = html.match(/<td>(.*?)<\/td>/s);
+    const hasMultiIndicator = dateMatch ? /multi-indicator/.test(dateMatch[1]) : false;
     const dateText = dateMatch ? dateMatch[1].replace(/<[^>]+>/g,'').trim() : '';
+    if(isEmptyVal && !hasMultiIndicator) return; // 'geen meting' zonder indicator: telt nergens voor mee
+    const valText = isEmptyVal ? '' : valTextRaw; // dash telt niet mee voor de waardekolom-breedte
     const actMatch = html.match(/<td class="actions-cell">(.*?)<\/td>/s);
     const actHtml = actMatch ? actMatch[1] : '';
     const actText = actHtml.replace(/<[^>]+>/g,'').trim();
     const hasIcon = /<svg/.test(actHtml);
-    rowsData.push({dateText, valText, actText, hasIcon});
+    rowsData.push({dateText, valText, actText, hasIcon, hasMultiIndicator});
   });
   const pad = 16;
   function measureDates(dateFn){
     let c1=0;
-    rowsData.forEach(r=>{ c1 = Math.max(c1, ...dateFn(r.dateText).map(t=>ctx.measureText(t).width)); });
+    rowsData.forEach(r=>{ c1 = Math.max(c1, ...dateFn(r.dateText).map(t=>ctx.measureText(t).width) .map(w=>w + (r.hasMultiIndicator ? ICON_ALLOWANCE : 0))); });
     return c1;
   }
   const fullDate = t => [t];
@@ -2156,9 +2310,9 @@ function updateTableColumnWidths(rowsHtmlArr){
 
   // de gekozen terugvalstand daadwerkelijk in de rij-HTML doorvoeren
   if(stage===1){
-    rowsHtmlArr = rowsHtmlArr.map(h => h.replace(/<td>(\d{2}-\d{2}-)\d{2}(\d{2})<\/td>/, "<td>$1'$2</td>"));
+    rowsHtmlArr = rowsHtmlArr.map(h => h.replace(/<td>(\d{2}-\d{2}-)\d{2}(\d{2})/, "<td>$1'$2"));
   } else if(stage>=2){
-    rowsHtmlArr = rowsHtmlArr.map(h => h.replace(/<td>(\d{2}-\d{2})-(\d{4})<\/td>/, '<td>$1<br>$2</td>'));
+    rowsHtmlArr = rowsHtmlArr.map(h => h.replace(/<td>(\d{2}-\d{2})-(\d{4})/, '<td>$1<br>$2'));
   }
   if(stage>=3){
     rowsHtmlArr = rowsHtmlArr.map(h => h.replace(/<td class="actions-cell">.*?<\/td>/s, '<td class="actions-cell"></td>'));
@@ -2171,6 +2325,31 @@ function updateTableColumnWidths(rowsHtmlArr){
   const col3 = document.getElementById('data-table-col-3');
   if(col1){ col1.style.width = pct1+'%'; col2.style.width = pct2+'%'; col3.style.width = pct3+'%'; }
   return rowsHtmlArr;
+}
+let expandedMultiDays = new Set(); // welke dagen (dateToKey) met >1 meting zijn opengeklapt
+function insertMultiMetingSubRows(htmlArr, dailyByDayKey, src){
+  if(!src?.meerdere_metingen) return htmlArr;
+  const result = [];
+  htmlArr.forEach(html=>{
+    result.push(html);
+    const m = html.match(/data-k="([^"]+)"/);
+    if(m && expandedMultiDays.has(m[1])){
+      const dayKey = m[1];
+      const info = dailyByDayKey.get(dayKey);
+      const entries = ((info && info.entries) ? info.entries : []).slice().sort((a,b)=>b.minutes-a.minutes); // laatste tijd boven, net als de datums
+      entries.forEach(e=>{
+        const isTimeless = !/T\d{4}$/.test(e.key);
+        const hh = String(Math.floor(e.minutes/60)).padStart(2,'0');
+        const mm = String(e.minutes%60).padStart(2,'0');
+        const timeDisplay = isTimeless
+          ? `<span style="opacity:.5;font-style:italic;" title="Geen tijd bekend, gerekend als 12:00">${hh}:${mm}</span>`
+          : `${hh}:${mm}`;
+        result.push(`<tr class="submeting-row" data-k="${e.key}" data-subkey="${e.key}"><td style="padding-left:28px;color:var(--muted);">${timeDisplay}</td><td class="val">${fmtVal(e.value, src?.decimalen)}</td><td class="actions-cell"></td></tr>`);
+      });
+      result.push(`<tr class="add-submeting-row" data-daykey="${dayKey}"><td colspan="3" style="text-align:center;color:var(--accent);padding:10px 0;cursor:pointer;">+ meting toevoegen</td></tr>`);
+    }
+  });
+  return result;
 }
 function collapseGapRuns(keysDesc, htmlArr, hasValueFn, unitLabel){
   const result = [];
@@ -2222,18 +2401,76 @@ async function renderDataView(keepSelection){
   currentFmtThousands = !!src?.duizendtal;
 
   const data = dataCache[id] || {};
+  const derived = getDerivedData(id); // eenmalig berekend en hergebruikt (tabel én grafiek)
+  const dailyAgg = derived.daily;
+  const dailyByDayKey = new Map(dailyAgg.map(p=>[dateToKey(p.date), p])); // dateToKey -> {date,value,count,entries}
+  currentDailyByDayKey = dailyByDayKey;
   let keys = Object.keys(data).sort().reverse();
-  const keysAsc = keys.slice().reverse();
-  let shown = getShownDataKeys(keys);
-  if(!keepSelection) selectedDataKey = null;
+  const shown = getShownDataKeys(keys); // ruwe (niet dag-samengevatte) sleutels
+  const shownDaySet = new Set(shown.map(k => dateToKey(keyToDate(k)))); // kalenderdagen binnen de getoonde periode
+  if(!keepSelection){ selectedDataKey = null; selectedIsSubRow = false; }
   updateEditSelectedButton();
 
   let rowsHtml;
-  if(dataAggMode === 'd'){
+  if(dataAggMode === 'p'){
+    // 'punten': elke meting krijgt een eigen rij (datum + tijd), geen samenvatting per dag.
+    const boundsP = getDataPeriodBounds(keys);
+    const flatAsc = derived.flat.filter(e => e.date >= boundsP.cutoff && e.date <= boundsP.rangeEnd);
+    const {mean: pMean, sigma: pSigma} = computeMeanSigma(flatAsc.map(e=>e.value));
+    const pRBar = computeRBar(flatAsc.map(e=>e.value));
+    const pChartMode = (chartViewMode === 'xmr') ? 'xmr' : 'standard';
+    const pIsRange = chartViewMode === 'range';
+    const rowsAsc = flatAsc.slice();
+    const rowsDesc = rowsAsc.slice().reverse();
+    const structDashP = '<span style="color:var(--text);">nvt</span>';
+    rowsHtml = rowsDesc.map((e, idx)=>{
+      const isOldest = idx === rowsDesc.length-1;
+      const ascIdx = rowsAsc.length-1-idx;
+      const prev = ascIdx > 0 ? rowsAsc[ascIdx-1] : null;
+      const hh = String(Math.floor(e.minutes/60)).padStart(2,'0');
+      const mm = String(e.minutes%60).padStart(2,'0');
+      const isTimeless = !/T\d{4}$/.test(e.key);
+      const timeTxt = isTimeless
+        ? `<span style="opacity:.5;font-style:italic;" title="Geen tijd bekend, gerekend als 12:00">${hh}:${mm}</span>`
+        : `${hh}:${mm}`;
+      const dateCell = `${formatDateCell(dateToKey(e.date))} <span style="color:var(--muted);">${timeTxt}</span>`;
+      const rowClassAttr = e.key === selectedDataKey ? ' class="punt-row selected"' : ' class="punt-row"';
+      if(pIsRange){
+        const rv = prev ? Math.abs(e.value - prev.value) : null;
+        const rvTxt = rv!=null ? fmtVal(rv, src?.decimalen) : structDashP;
+        return `<tr data-k="${e.key}"${rowClassAttr}><td>${dateCell}</td><td class="val">${rvTxt}</td>
+        <td class="actions-cell">${isOldest ? structDashP : '–'}</td></tr>`;
+      }
+      let diffCell = isOldest ? structDashP : '–';
+      if(prev){
+        const diff = e.value - prev.value;
+        if(diff > 0){
+          diffCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--danger);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/></svg>${fmtVal(Math.abs(diff), src?.decimalen)}`;
+        } else if(diff < 0){
+          diffCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--good);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/></svg>${fmtVal(Math.abs(diff), src?.decimalen)}`;
+        } else {
+          diffCell = '–';
+        }
+      }
+      const color = classifyValueColor(e.value, pMean, pSigma, pRBar, pChartMode);
+      return `<tr data-k="${e.key}"${rowClassAttr}><td>${dateCell}</td><td class="val" style="color:${color};">${fmtVal(e.value, src?.decimalen)}</td>
+        <td class="actions-cell">${diffCell}</td></tr>`;
+    });
+    rowsHtml = updateTableColumnWidths(rowsHtml);
+  } else if(dataAggMode === 'd'){
+    // 'dag-view': dezelfde vorm als de oude ruwe data (dateToKey -> waarde), maar dan met het
+    // dag-gemiddelde. Bestaande dag-logica (mean/sigma/rBar/Range/diff-pijlen) blijft ongewijzigd
+    // werken, want die kijkt nu naar deze al-samengevatte waarden i.p.v. losse metingen.
+    const dayData = {};
+    dailyAgg.forEach(p=>{ dayData[dateToKey(p.date)] = p.value; });
+    const data_ = dayData; // lokale naam zodat de rest van dit blok ongewijzigd 'data' als naam kan gebruiken
+    const dayKeys = Object.keys(dayData).sort().reverse();
+    const dayKeysAsc = dayKeys.slice().reverse();
+    const shown = getShownDataKeys(dayKeys);
     const ascIndexOf = new Map();
-    keysAsc.forEach((k,i)=>ascIndexOf.set(k,i));
-    const {mean: tblMean, sigma: tblSigma} = computeMeanSigma(shown.map(k=>data[k]));
-    const tblRBar = computeRBar(shown.slice().reverse().map(k=>data[k]));
+    dayKeysAsc.forEach((k,i)=>ascIndexOf.set(k,i));
+    const {mean: tblMean, sigma: tblSigma} = computeMeanSigma(shown.map(k=>data_[k]));
+    const tblRBar = computeRBar(shown.slice().reverse().map(k=>data_[k]));
     const tblChartMode = (chartViewMode === 'xmr' && dataAggMode === 'd') ? 'xmr' : 'standard';
     function valColor(v){
       return classifyValueColor(v, tblMean, tblSigma, tblRBar, tblChartMode);
@@ -2252,7 +2489,7 @@ async function renderDataView(keepSelection){
     if(isRangeMode){
       shownKeysAsc.forEach((k,i)=>{
         if(i>0){
-          rangeValMap.set(k, Math.abs(data[k]-data[shownKeysAsc[i-1]]));
+          rangeValMap.set(k, Math.abs(data_[k]-data_[shownKeysAsc[i-1]]));
           rangeKeysAsc.push(k);
         }
       });
@@ -2274,17 +2511,26 @@ async function renderDataView(keepSelection){
       }
     }
     const structDash = '<span style="color:var(--text);">nvt</span>';
+    const showChevron = !!src?.meerdere_metingen;
+    function multiIndicator(k){
+      if(!showChevron) return '';
+      const info = dailyByDayKey.get(k);
+      const count = info ? info.count : 0;
+      const isOpen = expandedMultiDays.has(k);
+      const countText = count > 0 ? count : '';
+      return ` <span class="multi-indicator" data-daykey="${k}" style="display:inline-flex;align-items:center;gap:2px;margin-left:6px;color:var(--accent);cursor:pointer;">${countText}<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transform:${isOpen?'rotate(180deg)':''};transition:transform .15s;"><polyline points="6 9 12 15 18 9"/></svg></span>`;
+    }
     rowsHtml = allKeysDesc.map((k,rowIdx)=>{
       const rowClasses = [];
       if(k===dateToKey(new Date())) rowClasses.push('today-row');
-      const hasVal = data[k] != null;
+      const hasVal = data_[k] != null;
       if(k===selectedDataKey) rowClasses.push('selected');
       const rowClassAttr = rowClasses.length ? ` class="${rowClasses.join(' ')}"` : '';
       const rowStyle = '';
       const isTrulyFirstRow = rowIdx === allKeysDesc.length-1; // allerlaatste (oudste) rij van de hele getoonde tabel
       if(!hasVal){
         const valCell = (isTrulyFirstRow && isRangeMode) ? structDash : '–';
-        return `<tr data-k="${k}"${rowClassAttr}${rowStyle}><td>${formatDateCell(k)}</td><td class="val">${valCell}</td>
+        return `<tr data-k="${k}"${rowClassAttr}${rowStyle}><td>${formatDateCell(k)}${multiIndicator(k)}</td><td class="val">${valCell}</td>
         <td class="actions-cell">${isTrulyFirstRow ? structDash : '–'}</td></tr>`;
       }
       if(isRangeMode){
@@ -2302,14 +2548,14 @@ async function renderDataView(keepSelection){
             deltaCell = '–';
           }
         }
-        return `<tr data-k="${k}"${rowClassAttr}${rowStyle}><td>${formatDateCell(k)}</td><td class="val"${rvStyle}>${rvTxt}</td>
+        return `<tr data-k="${k}"${rowClassAttr}${rowStyle}><td>${formatDateCell(k)}${multiIndicator(k)}</td><td class="val"${rvStyle}>${rvTxt}</td>
         <td class="actions-cell">${deltaCell}</td></tr>`;
       }
       const idx = ascIndexOf.get(k);
-      const prevVal = idx > 0 ? data[keysAsc[idx-1]] : null;
+      const prevVal = idx > 0 ? data_[dayKeysAsc[idx-1]] : null;
       let diffCell = isTrulyFirstRow ? structDash : '–';
       if(prevVal !== null){
-        const diff = data[k] - prevVal;
+        const diff = data_[k] - prevVal;
         if(diff > 0){
           diffCell = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--danger);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:3px;"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/></svg>${fmtVal(Math.abs(diff), src?.decimalen)}`;
         } else if(diff < 0){
@@ -2318,13 +2564,18 @@ async function renderDataView(keepSelection){
           diffCell = '–';
         }
       }
-      return `<tr data-k="${k}"${rowClassAttr}${rowStyle}><td>${formatDateCell(k)}</td><td class="val" style="color:${valColor(data[k])};">${fmtVal(data[k], src?.decimalen)}</td>
+      return `<tr data-k="${k}"${rowClassAttr}${rowStyle}><td>${formatDateCell(k)}${multiIndicator(k)}</td><td class="val" style="color:${valColor(data_[k])};">${fmtVal(data_[k], src?.decimalen)}</td>
         <td class="actions-cell">${diffCell}</td></tr>`;
     });
     rowsHtml = updateTableColumnWidths(rowsHtml);
-    rowsHtml = collapseGapRuns(allKeysDesc, rowsHtml, k => data[k] != null, 'dagen');
+    rowsHtml = collapseGapRuns(allKeysDesc, rowsHtml, k => data_[k] != null, 'dagen');
+    rowsHtml = insertMultiMetingSubRows(rowsHtml, dailyByDayKey, src);
   } else {
-    const pointsAsc = shown.slice().reverse().map(k=>({date: keyToDate(k), value: data[k]}));
+    // Zelfde basis als de grafiek: eerst per dag samenvatten, dán groeperen naar week/maand/etc.
+    // Anders zou een dag met meerdere metingen in de tabel zwaarder wegen dan in de grafiek.
+    const pointsAsc = dailyAgg
+      .filter(p => shownDaySet.has(dateToKey(p.date)))
+      .map(p => ({date: p.date, value: p.value}));
     let aggPoints = aggregatePoints(pointsAsc, dataAggMode);
     {
       const bounds = getDataPeriodBounds(keys);
@@ -2431,6 +2682,23 @@ async function renderDataView(keepSelection){
 }
 
 document.getElementById('data-table-body').addEventListener('click', (e)=>{
+  const addSubRow = e.target.closest('.add-submeting-row');
+  if(addSubRow){
+    const id = document.getElementById('data-source-select').value;
+    if(id) openEditDatapointModal(id, addSubRow.dataset.daykey);
+    return;
+  }
+  const multiInd = e.target.closest('.multi-indicator');
+  if(multiInd){
+    const scrollBox = document.getElementById('data-table-scroll');
+    const prevScrollTop = scrollBox.scrollTop;
+    const dayKey = multiInd.dataset.daykey;
+    if(expandedMultiDays.has(dayKey)) expandedMultiDays.delete(dayKey);
+    else expandedMultiDays.add(dayKey);
+    renderDataView(true);
+    requestAnimationFrame(()=>{ scrollBox.scrollTop = prevScrollTop; });
+    return;
+  }
   const gapRow = e.target.closest('tr.gap-summary-row');
   if(gapRow){
     const scrollBox = document.getElementById('data-table-scroll');
@@ -2451,22 +2719,31 @@ document.getElementById('data-table-body').addEventListener('click', (e)=>{
   }
   const tr = e.target.closest('tr[data-k]');
   if(!tr) return;
+  const isSubRow = tr.classList.contains('submeting-row');
   const k = tr.dataset.k;
   const wasSelected = tr.classList.contains('selected');
   document.querySelectorAll('#data-table-body tr.selected').forEach(r=>r.classList.remove('selected'));
   if(wasSelected){
     selectedDataKey = null;
+    selectedIsSubRow = false;
   } else {
     tr.classList.add('selected');
     selectedDataKey = k;
+    selectedIsSubRow = isSubRow;
   }
   updateEditSelectedButton();
   if(dataShowChart) renderDataChartPreview();
 });
 
+let currentDailyByDayKey = new Map();
+let selectedIsSubRow = false;
 function updateEditSelectedButton(){
   const editBtn = document.getElementById('btn-edit-selected-datapoint');
-  editBtn.disabled = !selectedDataKey || dataAggMode !== 'd' || chartViewMode === 'range';
+  const curSrc = getSource(document.getElementById('data-source-select').value);
+  // dagrij van een tijd-bron: niet bewerkbaar — welke meting van die dag zou je bedoelen?
+  const isAmbiguousDayRow = !!curSrc?.meerdere_metingen && dataAggMode === 'd' && !selectedIsSubRow;
+  editBtn.disabled = !selectedDataKey || (dataAggMode !== 'd' && dataAggMode !== 'p') || chartViewMode === 'range' || isAmbiguousDayRow;
+  editBtn.title = isAmbiguousDayRow ? 'Klap de dag uit en kies een tijd om te bewerken' : 'Wijzig geselecteerd meetpunt';
 }
 
 let currentDatapointKey = null;
@@ -2477,25 +2754,37 @@ function getDayAbbrev(key){
 function openEditDatapointModal(id, key){
   const data = dataCache[id] || {};
   const src = getSource(id);
+  // De cache is genormaliseerd (altijd 'D'-voorvoegsel); tabelrijen op dagniveau leveren nog een
+  // kale datumsleutel aan. Alles hieronder werkt op de genormaliseerde vorm.
+  const canonKey = /^D/.test(key) ? key : 'D'+key;
   currentFmtThousands = !!src?.duizendtal;
   setExplicitEmpty(false);
   applyValueInputConstraints(src);
-  currentDatapointKey = key;
-  document.getElementById('f-data-date-display').textContent = fmtDateNL(key);
-  document.getElementById('f-data-date-dayname').textContent = getDayAbbrev(key);
-  document.getElementById('f-data-date-todaybar').style.display = (key === dateToKey(new Date())) ? 'inline-block' : 'none';
+  currentDatapointKey = canonKey;
+  document.getElementById('f-data-date-text').textContent = fmtDateNL(canonKey);
+  document.getElementById('f-data-date-dayname').textContent = getDayAbbrev(canonKey);
+  document.getElementById('f-data-date-todaybar').style.display = (dateToKey(keyToDate(canonKey)) === dateToKey(new Date())) ? 'inline-block' : 'none';
   document.getElementById('f-data-value-unit').textContent = src?.eenheid ? ` (${src.eenheid})` : '';
-  if(data[key] == null){
+  const timeInput = document.getElementById('f-data-time');
+  if(src?.meerdere_metingen){
+    timeInput.style.display = '';
+    const timeMatch = canonKey.match(/T(\d{2})(\d{2})$/);
+    timeInput.value = timeMatch ? timeMatch[1]+':'+timeMatch[2] : '12:00'; // geen T-suffix (nieuw of oud-formaat) -> 12:00 als voorstel
+  } else {
+    timeInput.style.display = 'none';
+    timeInput.value = '';
+  }
+  if(data[canonKey] == null){
     // geselecteerde dag heeft nog geen waarde: open als 'toevoegen' met deze datum al ingevuld
     editingDataKey = null;
     document.getElementById('datapoint-modal-title').textContent = 'Meting toevoegen';
-    const def = getDefaultDatapointValue(id, keyToIsoDate(key));
+    const def = getDefaultDatapointValue(id, keyToIsoDate(canonKey));
     document.getElementById('f-data-value').value = def!=null ? fmtValPlain(def, src?.decimalen) : '';
     document.getElementById('btn-delete-datapoint').style.display = 'none';
   } else {
-    editingDataKey = key;
+    editingDataKey = canonKey;
     document.getElementById('datapoint-modal-title').textContent = 'Meting bewerken';
-    document.getElementById('f-data-value').value = data[key];
+    document.getElementById('f-data-value').value = data[canonKey];
     document.getElementById('btn-delete-datapoint').style.display = 'flex';
   }
   document.getElementById('btn-no-measurement').style.display = 'flex';
@@ -2612,9 +2901,9 @@ function closeDatapointModal(){
 
 function getDefaultDatapointValue(id, iso){
   const data = dataCache[id] || {};
-  const selectedKey = isoToKey(iso);
+  const selectedKey = 'D'+isoToKey(iso);
   if(data[selectedKey] != null) return data[selectedKey];
-  const prevKey = dateToKey(new Date(keyToDate(selectedKey).getTime() - 24*60*60*1000));
+  const prevKey = 'D'+dateToKey(new Date(keyToDate(selectedKey).getTime() - 24*60*60*1000));
   if(data[prevKey] != null) return data[prevKey];
   const vals = Object.values(data).filter(v=>v!=null && !isNaN(v));
   if(vals.length) return vals.reduce((s,v)=>s+v,0)/vals.length;
@@ -2630,32 +2919,46 @@ document.getElementById('btn-delete-datapoint').addEventListener('click', async 
   if(!id || !editingDataKey) return;
   const ok = await showConfirm(`Meting van ${fmtDateNL(editingDataKey)} verwijderen?`, 'Verwijderen');
   if(!ok) return;
-  delete dataCache[id][editingDataKey];
-  await syncDataFile(id);
+  deleteMeting(id, editingDataKey);
   closeDatapointModal();
   renderDataView();
+  syncDataFile(id); // schrijven op de achtergrond (fouten meldt syncDataFile zelf)
 });
 
 document.getElementById('btn-add-datapoint').addEventListener('click', async ()=>{
   const id = document.getElementById('data-source-select').value;
   if(!id){ showAlert('Kies eerst een bron.'); return; }
   if(!dirHandle){ showAlert('Koppel eerst een werkmap (zie tabblad Bronnen).'); return; }
-  const newKey = currentDatapointKey;
-  if(!newKey){ showAlert('Geen datum geselecteerd.'); return; }
+  if(!currentDatapointKey){ showAlert('Geen datum geselecteerd.'); return; }
+  const src = getSource(id);
+  currentFmtThousands = !!src?.duizendtal;
+  const newKey = src?.meerdere_metingen
+    ? composeKeyWithTime(currentDatapointKey, document.getElementById('f-data-time').value)
+    : currentDatapointKey;
   dataCache[id] = dataCache[id] || {};
 
+  if(src?.meerdere_metingen && !document.getElementById('f-data-time').value){
+    // geldt ook voor 'Geen meting': zonder tijd is niet te bepalen wélke meting van die dag bedoeld wordt
+    showAlert('Vul een tijd in.');
+    document.getElementById('f-data-time').focus();
+    return;
+  }
+
   if(isExplicitEmpty){
-    const willDelete = dataCache[id][newKey] != null;
+    // bron zonder '>1 meting per dag': één waarde per dag, dus de hele dag opruimen
+    const dayKeys = src?.meerdere_metingen ? [newKey] : keysForSameDay(dataCache[id], newKey);
+    const willDelete = dayKeys.some(k => dataCache[id][k] != null);
     if(willDelete){
       const ok = await showConfirm(`Er staat al een meting op ${fmtDateNL(newKey)}. Wil je die verwijderen?`, 'Verwijderen');
       if(!ok) return;
     }
-    if(editingDataKey && editingDataKey !== newKey) delete dataCache[id][editingDataKey];
-    delete dataCache[id][newKey];
-    await syncDataFile(id);
+    if(editingDataKey && editingDataKey !== newKey) deleteMeting(id, editingDataKey);
+    dayKeys.forEach(k => deleteMeting(id, k));
+    deleteMeting(id, newKey);
     closeDatapointModal();
     selectedDataKey = newKey;
     renderDataView(true);
+    syncDataFile(id); // schrijven op de achtergrond: modal/tabel reageren direct (fouten meldt syncDataFile zelf)
     return;
   }
 
@@ -2664,8 +2967,6 @@ document.getElementById('btn-add-datapoint').addEventListener('click', async ()=
   if(val===''){ showAlert('Vul een waarde in (of kies "Geen meting").'); return; }
   const num = Number(val);
   if(isNaN(num)){ showAlert('Ongeldige waarde.'); return; }
-  const src = getSource(id);
-  currentFmtThousands = !!src?.duizendtal;
   if(src?.min != null && num < src.min){ showAlert(`Waarde moet minimaal ${src.min} zijn.`); return; }
   if(src?.max != null && num > src.max){ showAlert(`Waarde moet maximaal ${src.max} zijn.`); return; }
   const dec = src?.decimalen ?? 1;
@@ -2674,26 +2975,28 @@ document.getElementById('btn-add-datapoint').addEventListener('click', async ()=
     showAlert(`Deze bron staat maximaal ${dec} decima${dec===1?'al':'len'} toe.`);
     return;
   }
-  const willOverwrite = dataCache[id][newKey] != null;
-  if(willOverwrite){
-    const ok = await showConfirm(`Er bestaat al een meting op ${fmtDateNL(newKey)} (${fmtVal(dataCache[id][newKey], dec)} ${src?.eenheid||''}). Wil je die overschrijven?`, 'Overschrijven');
+  const sameDayKeys = src?.meerdere_metingen ? [newKey] : keysForSameDay(dataCache[id], newKey);
+  const bestaandeKey = sameDayKeys.find(k => dataCache[id][k] != null);
+  if(bestaandeKey != null){
+    const ok = await showConfirm(`Er bestaat al een meting op ${fmtDateNL(newKey)} (${fmtVal(dataCache[id][bestaandeKey], dec)} ${src?.eenheid||''}). Wil je die overschrijven?`, 'Overschrijven');
     if(!ok) return;
   }
   if(keyToDate(newKey) > todayUTCDate()){
     const proceed = await showWarningConfirm(`${fmtDateNL(newKey)} ligt in de toekomst.`, 'Opslaan');
     if(!proceed) return;
   }
-  if(editingDataKey && editingDataKey !== newKey) delete dataCache[id][editingDataKey];
-  dataCache[id][newKey] = num;
-  await syncDataFile(id);
+  if(editingDataKey && editingDataKey !== newKey) deleteMeting(id, editingDataKey);
+  sameDayKeys.forEach(k => { if(k !== newKey) deleteMeting(id, k); }); // één waarde per dag afdwingen
+  setMeting(id, newKey, num);
   closeDatapointModal();
   selectedDataKey = newKey;
   renderDataView(true);
+  syncDataFile(id); // schrijven op de achtergrond: modal/tabel reageren direct (fouten meldt syncDataFile zelf)
 });
 
 const PERIOD_DAYS = {'1w':7,'1m':31,'3m':91,'6m':182,'9m':273,'1y':365,'5y':1826,'all':null};
 
-const AGG_MAX_GAP_DAYS = {d:1, w:10, m:40, q:100, y:400};
+const AGG_MAX_GAP_DAYS = {p:1, d:1, w:10, m:40, q:100, y:400};
 function getWeekStart(date){
   const d = new Date(date);
   const day = d.getUTCDay();
@@ -2742,7 +3045,7 @@ function fillAggregationGaps(aggPoints, mode, cutoff, rangeEnd){
   return filled;
 }
 function aggregatePoints(points, mode){
-  if(mode==='d' || !points.length) return points;
+  if(mode==='d' || mode==='p' || !points.length) return points;
   const groupFn = mode==='w' ? getWeekStart : mode==='m' ? getMonthStart : mode==='q' ? getQuarterStart : getYearStart;
   const groups = new Map();
   points.forEach(p=>{
@@ -2798,10 +3101,14 @@ async function getChartPointsForSelection(periodKey, fromElId, toElId){
     }
   }
 
-  const points = Object.entries(data)
-    .map(([k,v])=>({key:k, date:keyToDate(k), value:Number(v)}))
-    .filter(p => p.date >= cutoff && p.date <= rangeEnd)
-    .sort((a,b)=>a.date-b.date);
+  const derivedForChart = getDerivedData(id); // zelfde afgeleide data als de tabel gebruikt
+  const points = (dataAggMode === 'p')
+    // 'punten': elke meting krijgt zijn eigen x-positie op datum+tijd (filteren blijft op kalenderdag)
+    ? derivedForChart.flat
+        .filter(e => e.date >= cutoff && e.date <= rangeEnd)
+        .map(e => ({key: e.key, date: new Date(e.date.getTime() + e.minutes*60000), value: e.value}))
+    : derivedForChart.daily
+        .filter(p => p.date >= cutoff && p.date <= rangeEnd);
 
   const chartXMin = (isAll && points.length) ? points[0].date : cutoff;
   return {id, src, points, chartXMin, rangeEnd};
@@ -2827,11 +3134,11 @@ async function renderDataChartPreview(){
     : rangeEnd;
   // Volledige, met-gaten-gevulde tijdlijn — alleen gebruikt om de x-positie van de échte punten
   // correct te bepalen (zodat lege periodes ruimte innemen); statistieken blijven op 'points' zelf gebaseerd.
-  const fullGroupSlots = (dataAggMode !== 'd' && points.length)
+  const fullGroupSlots = (dataAggMode !== 'd' && dataAggMode !== 'p' && points.length)
     ? fillAggregationGaps(points, dataAggMode, chartXMin, chartXMax)
     : points;
 
-  const effectiveChartMode = (chartViewMode === 'xmr' && dataAggMode !== 'd') ? 'standard' : chartViewMode;
+  const effectiveChartMode = (chartViewMode === 'xmr' && dataAggMode !== 'd' && dataAggMode !== 'p') ? 'standard' : chartViewMode;
 
   const n = points.length;
   let mean=null, sigma=null, minVal=null, maxVal=null, sumVal=null;
@@ -2848,7 +3155,9 @@ async function renderDataChartPreview(){
   const periodBounds = getDataPeriodBounds(allKeysForBounds);
   const oneDayMsForCount = 24*60*60*1000;
   let shownCount;
-  if(dataAggMode === 'd'){
+  if(dataAggMode === 'p'){
+    shownCount = points.length; // punten-niveau: N is simpelweg het aantal getoonde metingen
+  } else if(dataAggMode === 'd'){
     shownCount = Math.max(0, Math.round((periodBounds.rangeEnd - periodBounds.cutoff)/oneDayMsForCount) + 1);
   } else {
     const groupFnForCount = dataAggMode==='w' ? getWeekStart : dataAggMode==='m' ? getMonthStart : dataAggMode==='q' ? getQuarterStart : getYearStart;
@@ -3043,7 +3352,7 @@ document.getElementById('data-chart-canvas').addEventListener('click', openChart
     const swipeDx = wasSwipe && Math.abs(dx) > Math.abs(dy) * 1.5 ? dx : 0;
     const swipeDy = wasSwipe && Math.abs(dy) > Math.abs(dx) * 1.5 ? dy : 0;
     if(wasSwipe && swipeDx !== 0){
-      const carousel = dataAggMode === 'd' ? ['standard','xmr','range'] : ['standard','range'];
+      const carousel = (dataAggMode === 'd' || dataAggMode === 'p') ? ['standard','xmr','range'] : ['standard','range'];
       const curIdx = carousel.indexOf(chartViewMode);
       const startIdx = curIdx === -1 ? 0 : curIdx;
       const dir = swipeDx < 0 ? 1 : -1; // links -> volgende (xmr/range eerst), rechts -> vorige
@@ -3084,7 +3393,7 @@ document.getElementById('data-chart-canvas').addEventListener('click', openChart
     const panelSwipeDx = isHorizontal ? dx : 0;
     const panelSwipeDy = isVertical ? dy : 0;
     if(panelWasSwipe && panelSwipeDx !== 0 && dataShowChart){
-      const carousel = dataAggMode === 'd' ? ['standard','xmr','range'] : ['standard','range'];
+      const carousel = (dataAggMode === 'd' || dataAggMode === 'p') ? ['standard','xmr','range'] : ['standard','range'];
       const curIdx = carousel.indexOf(chartViewMode);
       const startIdx = curIdx === -1 ? 0 : curIdx;
       const dir = panelSwipeDx < 0 ? 1 : -1; // links -> volgende (xmr/range eerst), rechts -> vorige
@@ -3254,7 +3563,7 @@ function drawChart(ctx, canvas, points, mean, sigma, src, xMin, xMax, maxGapDays
   if(chartMode === 'range') yMin = Math.max(0, yMin);
 
   const xSpan = Math.max(1, xMax - xMin);
-  const isAggregatedX = dataAggMode !== 'd' && fullGroupSlots.length > 1;
+  const isAggregatedX = dataAggMode !== 'd' && dataAggMode !== 'p' && fullGroupSlots.length > 1;
   const xIndexMap = new Map();
   if(isAggregatedX) fullGroupSlots.forEach((p,i)=>xIndexMap.set(p.date.getTime(), i));
   function xPix(d){
@@ -3268,6 +3577,26 @@ function drawChart(ctx, canvas, points, mean, sigma, src, xMin, xMax, maxGapDays
     return pad.left + ((d - xMin)/xSpan)*plotW;
   }
   function yPix(v){ return pad.top + (1 - (v-yMin)/(yMax-yMin))*plotH; }
+
+  if(dataAggMode === 'p'){
+    // Alleen op tijd-niveau: verticale banden per kalenderdag, zodat zichtbaar is welke
+    // metingen bij dezelfde dag horen. Bij andere groeperingen is elk punt al één eenheid.
+    const oneDay = 24*60*60*1000;
+    const firstDay = Date.UTC(xMin.getUTCFullYear(), xMin.getUTCMonth(), xMin.getUTCDate());
+    if(((xPix(new Date(firstDay+oneDay)) - xPix(new Date(firstDay))) >= 6)){ // te smal -> weglaten
+      ctx.save();
+      ctx.beginPath(); ctx.rect(pad.left, pad.top, plotW, plotH); ctx.clip();
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      let bandIdx = 0;
+      for(let t = firstDay; t < xMax.getTime(); t += oneDay, bandIdx++){
+        if(bandIdx % 2 !== 0) continue;
+        const x0 = Math.max(pad.left, xPix(new Date(t)));
+        const x1 = Math.min(pad.left+plotW, xPix(new Date(t+oneDay)));
+        if(x1 > x0) ctx.fillRect(x0, pad.top, x1-x0, plotH);
+      }
+      ctx.restore();
+    }
+  }
 
   ctx.strokeStyle = '#22292e'; ctx.lineWidth = 1;
   const ySteps = 5;
@@ -3403,7 +3732,8 @@ function drawChart(ctx, canvas, points, mean, sigma, src, xMin, xMax, maxGapDays
       if(dist > 3*sigma) color = '#ef5b5b';
       else if(dist > 2*sigma) color = '#f0a84f';
     }
-    const isSelected = selectedKey && dateToKey(p.date) === selectedKey;
+    const selDayKey = selectedKey ? dateToKey(keyToDate(selectedKey)) : null;
+    const isSelected = selectedKey && (p.key ? p.key === selectedKey : dateToKey(p.date) === selDayKey);
     if(isSelected){ selectedPoint = {x,y,color}; return; } // apart, als laatste, tekenen
     if(!dotsByColor.has(color)) dotsByColor.set(color, []);
     dotsByColor.get(color).push({x,y});
@@ -3431,7 +3761,7 @@ function drawChart(ctx, canvas, points, mean, sigma, src, xMin, xMax, maxGapDays
     ctx.stroke();
   } else if(selectedKey && mean!=null){
     // geselecteerde rij heeft geen meting: driehoekje op de juiste datum, wijzend naar het gemiddelde
-    const selDate = keyToDate(selectedKey);
+    const selDate = new Date(keyToDate(selectedKey).getTime() + (/T\d{4}$/.test(selectedKey) ? keyToTimeMinutes(selectedKey)*60000 : 0));
     if(selDate >= xMin && selDate <= xMax){
       const x = xPix(selDate), y = yPix(mean);
       ctx.beginPath();
