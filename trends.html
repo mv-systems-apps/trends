@@ -2270,6 +2270,7 @@ function updateTableColumnWidths(rowsHtmlArr){
   const monoFont = 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace';
   ctx.font = '20px ' + monoFont;
   const ICON_ALLOWANCE = 22; // ruimte voor het pijltje-icoon vóór de verschil-tekst
+  const MULTI_ALLOWANCE = 40; // aantal + chevron mét vergroot aanraakgebied
   const rowsData = [];
   rowsHtmlArr.forEach(html=>{
     const valMatch = html.match(/<td class="val"[^>]*>(.*?)<\/td>/s);
@@ -2290,7 +2291,7 @@ function updateTableColumnWidths(rowsHtmlArr){
   const pad = 16;
   function measureDates(dateFn){
     let c1=0;
-    rowsData.forEach(r=>{ c1 = Math.max(c1, ...dateFn(r.dateText).map(t=>ctx.measureText(t).width) .map(w=>w + (r.hasMultiIndicator ? ICON_ALLOWANCE : 0))); });
+    rowsData.forEach(r=>{ c1 = Math.max(c1, ...dateFn(r.dateText).map(t=>ctx.measureText(t).width) .map(w=>w + (r.hasMultiIndicator ? MULTI_ALLOWANCE : 0))); });
     return c1;
   }
   const fullDate = t => [t];
@@ -2535,7 +2536,7 @@ async function renderDataView(keepSelection){
       const count = info ? info.count : 0;
       const isOpen = expandedMultiDays.has(k);
       const countText = count > 0 ? count : '';
-      return ` <span class="multi-indicator" data-daykey="${k}" style="display:inline-flex;align-items:center;gap:2px;margin-left:6px;color:var(--accent);cursor:pointer;">${countText}<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transform:${isOpen?'rotate(180deg)':''};transition:transform .15s;"><polyline points="6 9 12 15 18 9"/></svg></span>`;
+      return ` <span class="multi-indicator" data-daykey="${k}" style="display:inline-flex;align-items:center;justify-content:center;gap:2px;min-width:22px;vertical-align:middle;padding:10px 12px;margin:-10px -6px -10px 0;color:var(--accent);cursor:pointer;">${countText}<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transform:${isOpen?'rotate(180deg)':''};transition:transform .15s;"><polyline points="6 9 12 15 18 9"/></svg></span>`;
     }
     rowsHtml = allKeysDesc.map((k,rowIdx)=>{
       const rowClasses = [];
