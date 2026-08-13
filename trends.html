@@ -907,6 +907,12 @@ function fmtDateNL(k){
   const m = k.match(/^D?(\d{4})(\d{2})(\d{2})/);
   return m[3]+'-'+m[2]+'-'+m[1];
 }
+function fmtKeyNL(k){
+  // datum, plus de tijd als de sleutel die heeft — zodat meldingen bij meerdere metingen
+  // per dag ondubbelzinnig zijn over wélke meting het gaat
+  const t = k.match(/T(\d{2})(\d{2})$/);
+  return fmtDateNL(k) + (t ? ` ${t[1]}:${t[2]}` : '');
+}
 function getISOWeek(date){
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -2044,7 +2050,12 @@ function updateDataAggButtonStates(){
 function getDateRange(id){
   const keys = Object.keys(dataCache[id] || {}).sort();
   if(!keys.length) return null;
-  return {first: keys[0], last: keys[keys.length-1]};
+  // kale dagsleutels (YYYYMMDD): alle gebruikers vergelijken hiermee op dagniveau, o.a. met
+  // isoToKey() uit de datumvelden. Een 'D'-voorvoegsel zou die tekstvergelijking omdraaien.
+  return {
+    first: dateToKey(keyToDate(keys[0])),
+    last: dateToKey(keyToDate(keys[keys.length-1]))
+  };
 }
 
 function firstOfMonthIso(){
@@ -2190,9 +2201,13 @@ function getShownDataKeys(keys){
   if(dataPeriodFilter === 'custom'){
     const fromIso = document.getElementById('data-range-from').value;
     const toIso = document.getElementById('data-range-to').value;
-    const fromKey = fromIso ? isoToKey(fromIso) : null;
-    const toKey = toIso ? isoToKey(toIso) : null;
-    return keys.filter(k => (!fromKey || k >= fromKey) && (!toKey || k <= toKey));
+    // op datum vergelijken, niet op sleuteltekst: sleutels hebben een 'D'-voorvoegsel en soms een tijd-deel
+    const fromDate = fromIso ? keyToDate(isoToKey(fromIso)) : null;
+    const toDate = toIso ? keyToDate(isoToKey(toIso)) : null;
+    return keys.filter(k => {
+      const d = keyToDate(k);
+      return (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
+    });
   }
   const days = DATA_PERIOD_DAYS[dataPeriodFilter];
   if(days === null) return keys;
@@ -2901,10 +2916,13 @@ function closeDatapointModal(){
 
 function getDefaultDatapointValue(id, iso){
   const data = dataCache[id] || {};
-  const selectedKey = 'D'+isoToKey(iso);
-  if(data[selectedKey] != null) return data[selectedKey];
-  const prevKey = 'D'+dateToKey(new Date(keyToDate(selectedKey).getTime() - 24*60*60*1000));
-  if(data[prevKey] != null) return data[prevKey];
+  // Op dagniveau zoeken: bij een tijd-bron bestaat er geen kale dagsleutel, maar wel metingen op die dag.
+  const daily = getDerivedData(id).daily;
+  const byDay = new Map(daily.map(p => [dateToKey(p.date), p.value]));
+  const dayKey = isoToKey(iso);
+  if(byDay.has(dayKey)) return byDay.get(dayKey);
+  const prevDayKey = dateToKey(new Date(keyToDate(dayKey).getTime() - 24*60*60*1000));
+  if(byDay.has(prevDayKey)) return byDay.get(prevDayKey);
   const vals = Object.values(data).filter(v=>v!=null && !isNaN(v));
   if(vals.length) return vals.reduce((s,v)=>s+v,0)/vals.length;
   return null;
@@ -2917,7 +2935,7 @@ document.getElementById('datapoint-modal-overlay').addEventListener('click', (e)
 document.getElementById('btn-delete-datapoint').addEventListener('click', async ()=>{
   const id = document.getElementById('data-source-select').value;
   if(!id || !editingDataKey) return;
-  const ok = await showConfirm(`Meting van ${fmtDateNL(editingDataKey)} verwijderen?`, 'Verwijderen');
+  const ok = await showConfirm(`Meting van ${fmtKeyNL(editingDataKey)} verwijderen?`, 'Verwijderen');
   if(!ok) return;
   deleteMeting(id, editingDataKey);
   closeDatapointModal();
@@ -2949,7 +2967,7 @@ document.getElementById('btn-add-datapoint').addEventListener('click', async ()=
     const dayKeys = src?.meerdere_metingen ? [newKey] : keysForSameDay(dataCache[id], newKey);
     const willDelete = dayKeys.some(k => dataCache[id][k] != null);
     if(willDelete){
-      const ok = await showConfirm(`Er staat al een meting op ${fmtDateNL(newKey)}. Wil je die verwijderen?`, 'Verwijderen');
+      const ok = await showConfirm(`Er staat al een meting op ${fmtKeyNL(newKey)}. Wil je die verwijderen?`, 'Verwijderen');
       if(!ok) return;
     }
     if(editingDataKey && editingDataKey !== newKey) deleteMeting(id, editingDataKey);
@@ -2978,7 +2996,7 @@ document.getElementById('btn-add-datapoint').addEventListener('click', async ()=
   const sameDayKeys = src?.meerdere_metingen ? [newKey] : keysForSameDay(dataCache[id], newKey);
   const bestaandeKey = sameDayKeys.find(k => dataCache[id][k] != null);
   if(bestaandeKey != null){
-    const ok = await showConfirm(`Er bestaat al een meting op ${fmtDateNL(newKey)} (${fmtVal(dataCache[id][bestaandeKey], dec)} ${src?.eenheid||''}). Wil je die overschrijven?`, 'Overschrijven');
+    const ok = await showConfirm(`Er bestaat al een meting op ${fmtKeyNL(bestaandeKey)} (${fmtVal(dataCache[id][bestaandeKey], dec)} ${src?.eenheid||''}). Wil je die overschrijven?`, 'Overschrijven');
     if(!ok) return;
   }
   if(keyToDate(newKey) > todayUTCDate()){
@@ -3703,12 +3721,15 @@ function drawChart(ctx, canvas, points, mean, sigma, src, xMin, xMax, maxGapDays
   if(points.length>1){
     ctx.strokeStyle = showDots ? '#5c6f79' : '#9fd8e0'; ctx.lineWidth = 1.8; ctx.beginPath();
     const oneDayMs = 24*60*60*1000;
+    const middernacht = d => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
     points.forEach((p,i)=>{
       const x=xPix(p.date), y=yPix(p.value);
       if(i===0){
         ctx.moveTo(x,y);
       } else {
-        const gapDays = (p.date - points[i-1].date) / oneDayMs;
+        // in kalenderdagen rekenen: in tijd-modus dragen de punten ook een tijdstip, en anders zou
+        // bijv. 06:30 -> 18:30 op de volgende dag als 1,5 dag tellen en de lijn onterecht breken
+        const gapDays = (middernacht(p.date) - middernacht(points[i-1].date)) / oneDayMs;
         if(gapDays > maxGapDays) ctx.moveTo(x,y);
         else ctx.lineTo(x,y);
       }
