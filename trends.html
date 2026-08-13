@@ -1437,6 +1437,8 @@ let formMeerdereMetingen = false;
 function setFormMeerdereMetingen(show){
   formMeerdereMetingen = show;
   document.getElementById('f-meerdere-metingen').classList.toggle('active', show);
+  // 'tijd' als standaardgroepering kan alleen bestaan zolang meerdere metingen per dag zijn toegestaan
+  if(!show && formStandaardGroepering === 'p') setFormStandaardGroepering('d');
 }
 document.getElementById('f-meerdere-metingen').addEventListener('click', ()=>{
   setFormMeerdereMetingen(!formMeerdereMetingen);
@@ -1482,7 +1484,7 @@ document.getElementById('standaard-bereik-ok').addEventListener('click', ()=>{
   popModalForClose();
 });
 
-const STANDAARD_GROEPERING_OPTIONS = [['d','dag'],['w','week'],['m','maand'],['q','kwartaal'],['y','jaar']];
+const STANDAARD_GROEPERING_OPTIONS = [['p','tijd'],['d','dag'],['w','week'],['m','maand'],['q','kwartaal'],['y','jaar']];
 let formStandaardGroepering = 'd';
 let pickedStandaardGroepering = 'd';
 function setFormStandaardGroepering(val){
@@ -1494,7 +1496,7 @@ document.getElementById('f-standaard-groepering-btn').addEventListener('click', 
   pickedStandaardGroepering = formStandaardGroepering;
   const list = document.getElementById('standaard-groepering-list');
   list.innerHTML = '';
-  STANDAARD_GROEPERING_OPTIONS.forEach(([val,label])=>{
+  STANDAARD_GROEPERING_OPTIONS.filter(([val]) => val !== 'p' || formMeerdereMetingen).forEach(([val,label])=>{
     const row = document.createElement('div');
     row.className = 'source-row';
     if(val === pickedStandaardGroepering) row.classList.add('selected');
