@@ -1197,16 +1197,22 @@ document.getElementById('btn-authorize-dir').addEventListener('click', async ()=
       await loadMetaFromDir();
       setFileLinkUI('dir', 'linked', {name: dirHandle.name});
       const lastBronId = await idbGet('lastBron').catch(()=>null);
-      if(lastBronId && bronnen.some(b=>b.id===lastBronId)){
-        document.getElementById('data-source-select').value = lastBronId;
+      // Zonder eerdere keuze staat de eerste bron toch al geselecteerd (eerste <option>);
+      // pas dan óók diens instellingen toe, anders draait de eerste start na koppelen op
+      // de standaardwaarden (1 maand / dag) en lijkt de grafiek leeg.
+      const startBronId = (lastBronId && bronnen.some(b=>b.id===lastBronId))
+        ? lastBronId
+        : (bronnen.length ? bronnen[0].id : null);
+      const restoredSrc = startBronId ? getSource(startBronId) : null;
+      if(startBronId){
+        document.getElementById('data-source-select').value = startBronId;
         updateSourcePickerLabel();
-        dataPeriodFilter = getSource(lastBronId)?.standaard_bereik || '1m';
+        dataPeriodFilter = restoredSrc?.standaard_bereik || '1m';
         syncPeriodButtonsActive();
-        dataAggMode = getSource(lastBronId)?.standaard_groepering || 'd';
+        dataAggMode = restoredSrc?.standaard_groepering || 'd';
         document.getElementById('data-agg-filter').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.agg===dataAggMode));
       }
       if(bronnen.length) await switchToView('data');
-      const restoredSrc = lastBronId ? getSource(lastBronId) : null;
       await setDataShowChart(restoredSrc ? restoredSrc.toon_grafiek !== false : dataShowChart);
     } else {
       setFileLinkUI('dir', 'auth', {name: dirHandle.name});
@@ -1245,16 +1251,22 @@ async function bootDir(){
       await loadMetaFromDir();
       setFileLinkUI('dir', 'linked', {name: handle.name});
       const lastBronId = await idbGet('lastBron').catch(()=>null);
-      if(lastBronId && bronnen.some(b=>b.id===lastBronId)){
-        document.getElementById('data-source-select').value = lastBronId;
+      // Zonder eerdere keuze staat de eerste bron toch al geselecteerd (eerste <option>);
+      // pas dan óók diens instellingen toe, anders draait de eerste start na koppelen op
+      // de standaardwaarden (1 maand / dag) en lijkt de grafiek leeg.
+      const startBronId = (lastBronId && bronnen.some(b=>b.id===lastBronId))
+        ? lastBronId
+        : (bronnen.length ? bronnen[0].id : null);
+      const restoredSrc = startBronId ? getSource(startBronId) : null;
+      if(startBronId){
+        document.getElementById('data-source-select').value = startBronId;
         updateSourcePickerLabel();
-        dataPeriodFilter = getSource(lastBronId)?.standaard_bereik || '1m';
+        dataPeriodFilter = restoredSrc?.standaard_bereik || '1m';
         syncPeriodButtonsActive();
-        dataAggMode = getSource(lastBronId)?.standaard_groepering || 'd';
+        dataAggMode = restoredSrc?.standaard_groepering || 'd';
         document.getElementById('data-agg-filter').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.agg===dataAggMode));
       }
       if(bronnen.length) await switchToView('data');
-      const restoredSrc = lastBronId ? getSource(lastBronId) : null;
       await setDataShowChart(restoredSrc ? restoredSrc.toon_grafiek !== false : dataShowChart);
     } else {
       setFileLinkUI('dir', 'auth', {name: handle.name});
@@ -3320,10 +3332,10 @@ function openChartStatsModal(){
     ['UWL'+uwlF, stats.uwl!=null ? fmtVal(stats.uwl, stats.dec) : '–', '#f0a84f'],
     ['LWL'+lwlF, stats.lwl!=null ? fmtVal(stats.lwl, stats.dec) : '–', '#f0a84f'],
     ['LCL'+lclF, stats.lcl!=null ? fmtVal(stats.lcl, stats.dec) : '–', '#ef5b5b'],
-    ['Doel', stats.doelWaarde!=null ? fmtVal(stats.doelWaarde, stats.dec) : '–', 'var(--muted)'],
-    ['Doel·bereik', stats.doelBereik!=null ? fmtVal(stats.doelBereik, stats.dec) : '–', 'var(--muted)'],
-    ['Doel·max', stats.doelBoven!=null ? fmtVal(stats.doelBoven, stats.dec) : '–', 'var(--muted)'],
-    ['Doel·min', stats.doelOnder!=null ? fmtVal(stats.doelOnder, stats.dec) : '–', 'var(--muted)'],
+    ['Doel', stats.doelWaarde!=null ? fmtVal(stats.doelWaarde, stats.dec) : '–', '#b48ef0'],
+    ['Doel·bereik', stats.doelBereik!=null ? fmtVal(stats.doelBereik, stats.dec) : '–', '#b48ef0'],
+    ['Doel·max', stats.doelBoven!=null ? fmtVal(stats.doelBoven, stats.dec) : '–', '#b48ef0'],
+    ['Doel·min', stats.doelOnder!=null ? fmtVal(stats.doelOnder, stats.dec) : '–', '#b48ef0'],
   ];
   function renderRows(rows){
     return rows.map(([label,val,color],i)=>
@@ -3614,6 +3626,18 @@ function drawChart(ctx, canvas, points, mean, sigma, src, xMin, xMax, maxGapDays
   }
   function yPix(v){ return pad.top + (1 - (v-yMin)/(yMax-yMin))*plotH; }
 
+  if(chartMode !== 'range' && src?.doel_x != null && src?.doel_r != null){
+    // Doelbereik als échte achtergrond: vóór raster, referentielijnen en punten, zodat het
+    // niets dimt. Zelfde kleurfamilie als de doellijn (--good), zodat ze bij elkaar horen.
+    const top = yPix(src.doel_x + src.doel_r/2);
+    const bottom = yPix(src.doel_x - src.doel_r/2);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(pad.left, pad.top, plotW, plotH); ctx.clip();
+    ctx.fillStyle = 'rgba(180,142,240,0.10)';
+    ctx.fillRect(pad.left, top, plotW, bottom-top);
+    ctx.restore();
+  }
+
   if(dataAggMode === 'p'){
     // Alleen op tijd-niveau: verticale banden per kalenderdag, zodat zichtbaar is welke
     // metingen bij dezelfde dag horen. Bij andere groeperingen is elk punt al één eenheid.
@@ -3638,12 +3662,29 @@ function drawChart(ctx, canvas, points, mean, sigma, src, xMin, xMax, maxGapDays
   const ySteps = 5;
   ctx.font = '11px ui-monospace, monospace';
   ctx.fillStyle = '#e7edf0';
+  // De doelwaarde krijgt een eigen label op de as, in de doelkleur. Een regulier label dat
+  // er te dicht bij ligt wordt weggelaten — anders zouden ze over elkaar heen vallen.
+  const doelY = (chartMode !== 'range' && src?.doel_x != null) ? yPix(src.doel_x) : null;
+  const doelLabelZichtbaar = doelY != null && doelY >= pad.top && doelY <= pad.top + plotH;
   for(let i=0;i<=ySteps;i++){
     const v = yMin + (yMax-yMin)*i/ySteps;
     const y = yPix(v);
     ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(cssW-pad.right,y); ctx.stroke();
+    if(doelLabelZichtbaar && Math.abs(y - doelY) < 13) continue; // botst met het doellabel
     ctx.textAlign='right'; ctx.textBaseline='middle';
     ctx.fillText(fmtVal(v, src?.decimalen), pad.left-8, y);
+  }
+  if(doelLabelZichtbaar){
+    // Iets groter dan de gewone as-labels voor de leesbaarheid, maar alleen als het
+    // binnen de as-strook past — anders zou een brede waarde links wegvallen.
+    const doelTxt = fmtVal(src.doel_x, src?.decimalen);
+    ctx.font = '13px ui-monospace, monospace';
+    if(ctx.measureText(doelTxt).width > pad.left - 12) ctx.font = '11px ui-monospace, monospace';
+    ctx.fillStyle = '#b48ef0';
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(doelTxt, pad.left-8, doelY);
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.fillStyle = '#e7edf0';
   }
   ctx.textBaseline='top';
   ctx.font = '11px ui-monospace, monospace';
@@ -3703,9 +3744,9 @@ function drawChart(ctx, canvas, points, mean, sigma, src, xMin, xMax, maxGapDays
     ctx.fillRect(barX, barY, Math.max(2,barW), barH);
   }
 
-  function hLine(v, color, dash){
+  function hLine(v, color, dash, width){
     const y = yPix(v);
-    ctx.strokeStyle = color; ctx.setLineDash(dash||[]); ctx.lineWidth = 1.4;
+    ctx.strokeStyle = color; ctx.setLineDash(dash||[]); ctx.lineWidth = width || 1.4;
     ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(cssW-pad.right,y); ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -3725,15 +3766,16 @@ function drawChart(ctx, canvas, points, mean, sigma, src, xMin, xMax, maxGapDays
     }
     hLine(mean, '#4fd1c5', []);
   }
+  const DOEL_KLEUR = '#b48ef0';
   if(chartMode !== 'range' && src?.doel_x != null && src?.doel_r != null){
-    const top = yPix(src.doel_x + src.doel_r/2);
-    const bottom = yPix(src.doel_x - src.doel_r/2);
-    ctx.fillStyle = 'rgba(159,216,224,0.08)';
-    ctx.fillRect(pad.left, top, plotW, bottom-top);
-    hLine(src.doel_x + src.doel_r/2, '#6f8890', [2,3]);
-    hLine(src.doel_x - src.doel_r/2, '#6f8890', [2,3]);
+    hLine(src.doel_x + src.doel_r/2, 'rgba(180,142,240,0.45)', [2,3]);
+    hLine(src.doel_x - src.doel_r/2, 'rgba(180,142,240,0.45)', [2,3]);
   }
-  if(chartMode !== 'range' && src?.doel_x != null) hLine(src.doel_x, '#8a99a1', [2,3]);
+  if(chartMode !== 'range' && src?.doel_x != null){
+    // Lijnstijl-hiërarchie: gemiddelde doorgetrokken (wat het proces doet), doel met lange
+    // streepjes en iets dikker (wat je nastreeft), regelgrenzen met korte streepjes (signalen).
+    hLine(src.doel_x, DOEL_KLEUR, [7,4], 1.8);
+  }
 
   const showDots = !(src?.puntjes_drempel != null && points.length > src.puntjes_drempel);
   if(points.length>1){
