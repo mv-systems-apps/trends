@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'trends-v13';
+const CACHE_VERSION = 'trends-v15';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -27,13 +27,15 @@ self.addEventListener('activate', (event) => {
 // Stale-while-revalidate: serveer direct uit cache, ververs op de achtergrond.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Alleen eigen bestanden: verzoeken naar een andere origin horen niet in de Trends-cache.
+  if (new URL(event.request.url).origin !== self.location.origin) return;
 
   event.respondWith(
     caches.open(CACHE_VERSION).then((cache) =>
       cache.match(event.request).then((cachedResponse) => {
         const fetchPromise = fetch(event.request)
           .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
+            if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
               cache.put(event.request, networkResponse.clone());
             }
             return networkResponse;
