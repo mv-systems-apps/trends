@@ -336,14 +336,14 @@
       <div class="empty" id="source-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
       <div class="source-list" id="source-list" style="max-height:60vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;"></div>
       <div class="empty" id="source-empty" style="display:none;">Nog geen bronnen. Koppel eerst een metadatabestand hierboven.</div>
-      <div id="app-version-stamp">Versie 13527D4-003</div>
+      <div id="app-version-stamp">Versie 13527D4-006</div>
     </div>
 
     <div id="source-modal-overlay" class="modal-overlay" style="display:none;">
-      <div class="modal-box" style="max-width:480px;max-height:85vh;overflow-y:auto;">
+      <div class="modal-box" role="dialog" aria-modal="true" style="max-width:480px;max-height:85vh;overflow-y:auto;">
         <h2 id="meta-form-title" class="accent-title" style="margin:0 0 16px;">Nieuwe bron</h2>
         <div class="grid2">
-          <div class="field"><label>Titel</label><input type="text" id="f-titel" placeholder="bv. Bloeddruk"></div>
+          <div class="field"><label for="f-titel">Titel</label><input type="text" id="f-titel" placeholder="bv. Bloeddruk"></div>
           <div class="field">
             <label style="display:flex;align-items:center;justify-content:space-between;">
               Bestandsnaam
@@ -358,12 +358,12 @@
             </label>
             <textarea id="f-bestand" placeholder="bv. Bloeddruk.json" rows="1" readonly style="width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:13px 14px;border-radius:8px;font-family:var(--mono);font-size:19px;margin-bottom:12px;box-sizing:border-box;resize:none;overflow:hidden;word-break:break-word;cursor:pointer;"></textarea>
           </div>
-          <div class="field"><label>Eenheid</label><input type="text" id="f-eenheid" placeholder="bv. mmHg"></div>
-          <div class="field"><label>Decimalen</label><input type="number" id="f-decimalen" placeholder="1" min="0" max="6" step="1"></div>
-          <div class="field"><label>Min</label><input type="text" inputmode="decimal" id="f-min" placeholder="0"></div>
-          <div class="field"><label>Max</label><input type="text" inputmode="decimal" id="f-max" placeholder="250"></div>
-          <div class="field"><label>Doelwaarde</label><input type="text" inputmode="decimal" id="f-doelx" placeholder="optioneel"></div>
-          <div class="field"><label>Doel-spreiding</label><input type="text" inputmode="decimal" id="f-doelr" placeholder="optioneel"></div>
+          <div class="field"><label for="f-eenheid">Eenheid</label><input type="text" id="f-eenheid" placeholder="bv. mmHg"></div>
+          <div class="field"><label for="f-decimalen">Decimalen</label><input type="number" id="f-decimalen" placeholder="1" min="0" max="10" step="1"></div>
+          <div class="field"><label for="f-min">Min</label><input type="text" inputmode="decimal" id="f-min" placeholder="0"></div>
+          <div class="field"><label for="f-max">Max</label><input type="text" inputmode="decimal" id="f-max" placeholder="250"></div>
+          <div class="field"><label for="f-doelx">Doelwaarde</label><input type="text" inputmode="decimal" id="f-doelx" placeholder="optioneel"></div>
+          <div class="field"><label for="f-doelr">Doel-spreiding</label><input type="text" inputmode="decimal" id="f-doelr" placeholder="optioneel"></div>
         </div>
         <div class="field" style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
           <label style="margin:0;">Duizendtal-scheiding</label>
@@ -384,7 +384,7 @@
           </button>
         </div>
         <div class="field" style="margin-top:10px;">
-          <label>Alleen lijn als n ></label>
+          <label for="f-puntjes-drempel">Alleen lijn als n ></label>
           <input type="text" inputmode="numeric" id="f-puntjes-drempel" placeholder="optioneel">
         </div>
         <div class="field" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
@@ -413,7 +413,7 @@
     </div>
 
     <div class="modal-overlay" id="standaard-bereik-modal-overlay" style="display:none;">
-      <div class="modal-box" style="max-width:320px;">
+      <div class="modal-box" role="dialog" aria-modal="true" style="max-width:320px;">
         <h2 class="accent-title" style="margin:0 0 16px;">Bereik</h2>
         <div class="source-list" id="standaard-bereik-list"></div>
         <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;margin-top:12px;">
@@ -424,7 +424,7 @@
     </div>
 
     <div class="modal-overlay" id="standaard-groepering-modal-overlay" style="display:none;">
-      <div class="modal-box" style="max-width:320px;">
+      <div class="modal-box" role="dialog" aria-modal="true" style="max-width:320px;">
         <h2 class="accent-title" style="margin:0 0 16px;">Groepering</h2>
         <div class="source-list" id="standaard-groepering-list"></div>
         <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;margin-top:12px;">
@@ -435,7 +435,7 @@
     </div>
 
     <div class="modal-overlay" id="bestand-picker-modal-overlay" style="display:none;">
-      <div class="modal-box" style="max-width:420px;">
+      <div class="modal-box" role="dialog" aria-modal="true" style="max-width:420px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 16px;">
           <h2 class="accent-title" style="margin:0;">Bestand kiezen</h2>
           <button type="button" class="icon-btn-sm icon-btn-filled" id="btn-toggle-bestand-search" title="Zoeken" aria-label="Zoeken" style="width:38px;height:38px;">
@@ -456,10 +456,10 @@
     </div>
 
     <div class="modal-overlay" id="bestand-nieuwe-naam-modal-overlay" style="display:none;">
-      <div class="modal-box" style="max-width:360px;">
+      <div class="modal-box" role="dialog" aria-modal="true" style="max-width:360px;">
         <h2 class="accent-title" style="margin:0 0 16px;">Nieuw bestand</h2>
         <div class="field">
-          <label>Bestandsnaam</label>
+          <label for="bestand-nieuwe-naam-input">Bestandsnaam</label>
           <input type="text" id="bestand-nieuwe-naam-input" placeholder="bv. Slaap.json">
         </div>
         <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;margin-top:12px;">
@@ -524,7 +524,7 @@
     </div>
 
     <div class="modal-overlay" id="data-source-picker-overlay" style="display:none;">
-      <div class="modal-box" style="max-width:360px;">
+      <div class="modal-box" role="dialog" aria-modal="true" style="max-width:360px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 16px;">
           <h2 class="accent-title" style="margin:0;">Kies een bron</h2>
           <button class="icon-btn-sm icon-btn-filled" id="btn-toggle-picker-search" title="Zoeken" aria-label="Zoeken" style="width:40px;height:40px;">
@@ -544,11 +544,11 @@
     </div>
 
     <div class="modal-overlay" id="data-range-modal-overlay" style="display:none;">
-      <div class="modal-box" style="max-width:360px;">
+      <div class="modal-box" role="dialog" aria-modal="true" style="max-width:360px;">
         <h2 class="accent-title" style="margin:0 0 16px;">Periode</h2>
           <div class="grid2">
             <div class="field">
-              <label>Van</label>
+              <label for="data-range-from">Van</label>
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                 <span style="display:flex;align-items:center;">
                   <span id="data-range-from-todaybar" style="display:none;width:4px;height:16px;background:var(--accent);border-radius:2px;margin-right:6px;"></span>
@@ -566,7 +566,7 @@
               <input type="date" id="data-range-from">
             </div>
             <div class="field">
-              <label>T/M</label>
+              <label for="data-range-to">T/M</label>
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                 <span style="display:flex;align-items:center;">
                   <span id="data-range-to-todaybar" style="display:none;width:4px;height:16px;background:var(--accent);border-radius:2px;margin-right:6px;"></span>
@@ -592,7 +592,7 @@
       </div>
 
     <div class="modal-overlay" id="chart-stats-modal-overlay" style="display:none;">
-      <div class="modal-box" style="max-width:340px;">
+      <div class="modal-box" role="dialog" aria-modal="true" style="max-width:340px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 16px;">
           <h2 class="accent-title" style="margin:0;">Analyse <span class="sub" id="chart-stats-shown-count"></span></h2>
           <span id="chart-stats-badge" style="display:none;background:#4f8ff0;color:#eef4ff;font-family:var(--mono);font-size:12px;font-weight:600;padding:4px 9px;border-radius:5px;"></span>
@@ -627,7 +627,7 @@
       </div>
 
     <div id="datapoint-modal-overlay" class="modal-overlay" style="display:none;">
-      <div class="modal-box" style="max-width:400px;">
+      <div class="modal-box" role="dialog" aria-modal="true" style="max-width:400px;">
         <h2 id="datapoint-modal-title" class="accent-title" style="margin:0 0 16px;">Meting toevoegen</h2>
         <div class="grid2">
           <div class="field">
@@ -680,7 +680,7 @@
 </nav>
 
 <div id="confirm-overlay" class="modal-overlay" style="display:none;">
-  <div class="modal-box">
+  <div class="modal-box" role="dialog" aria-modal="true">
     <p id="confirm-text"></p>
     <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;">
       <button class="btn secondary compact" id="confirm-cancel" style="flex:1;">Annuleren</button>
@@ -690,7 +690,7 @@
 </div>
 
 <div id="alert-overlay" class="modal-overlay" style="display:none;">
-  <div class="modal-box">
+  <div class="modal-box" role="dialog" aria-modal="true">
     <p id="alert-text"></p>
     <div class="actions" style="justify-content:flex-end;flex-wrap:nowrap;">
       <button class="btn compact" id="alert-ok" style="flex:1;">OK</button>
@@ -699,7 +699,7 @@
 </div>
 
 <div id="warn-overlay" class="modal-overlay" style="display:none;">
-  <div class="modal-box" style="border:1px solid var(--warn);">
+  <div class="modal-box" role="dialog" aria-modal="true" style="border:1px solid var(--warn);">
     <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;">
       <svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:var(--warn);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;"><path d="M12 9v4M12 17h.01M10.29 3.86l-8.18 14.18A2 2 0 0 0 3.83 21h16.34a2 2 0 0 0 1.72-3l-8.18-14.14a2 2 0 0 0-3.44 0z"/></svg>
       <p id="warn-text" style="margin:0;color:var(--text);"></p>
@@ -860,6 +860,67 @@ async function maybeBackupFile(name){
     return;
   }
   try{ await idbSet(idbKey, today); }catch(e){}
+}
+
+function beschadigdFilename(name){
+  const dot = name.lastIndexOf('.');
+  return dot === -1 ? name+'_beschadigd' : name.slice(0,dot)+'_beschadigd'+name.slice(dot);
+}
+
+/* Herstel na een beschadigd databestand. Zonder dit loopt een onleesbaar
+   bestand dood: de app waarschuwt wel, maar terugzetten moest je zelf doen.
+   Niets gebeurt automatisch — eerst bevestigen — en het beschadigde bestand
+   blijft bewaard, zodat deze stap nooit de laatste kopie weggooit. */
+async function leesBackup(name){
+  const handle = await dirHandle.getFileHandle(backupFilename(name)).catch(()=>null);
+  if(!handle) return null;
+  const file = await handle.getFile();
+  const text = await file.text();
+  if(!text.trim()) return null;
+  return {obj: JSON.parse(text), datum: fmtDateNL(dateToKey(new Date(file.lastModified)))};
+}
+
+async function herstelUitBackup(id){
+  const src = getSource(id);
+  if(!src || !dirHandle) return null;
+  let backup = null;
+  try{ backup = await leesBackup(src.bestand); }
+  catch(e){ console.error('back-up ook onleesbaar', e); return null; }
+  if(!backup) return null;
+
+  const norm = normalizeDataKeys(dataFileObj(backup.obj), src);
+  const aantal = Object.keys(norm.data).length;
+  const ok = await showConfirm(
+    `${src.bestand} is beschadigd. De back-up van ${backup.datum} bevat ${aantal} meting(en). Terugzetten? Het beschadigde bestand blijft bewaard als ${beschadigdFilename(src.bestand)}.`,
+    'Terugzetten');
+  if(!ok) return null;
+
+  // Eerst het beschadigde bestand veiligstellen, daarna pas iets overschrijven.
+  try{
+    const kapot = await dirHandle.getFileHandle(src.bestand).catch(()=>null);
+    if(kapot){
+      const tekst = await (await kapot.getFile()).text();
+      const doel = await dirHandle.getFileHandle(beschadigdFilename(src.bestand), {create:true});
+      const writable = await doel.createWritable();
+      await writable.write(tekst);
+      await writable.close();
+    }
+  }catch(e){
+    console.error('beschadigd bestand bewaren mislukt', e);
+    showAlert(`Het beschadigde bestand kon niet worden bewaard (${e.name || e.message}). Er is niets overschreven.`);
+    return null;
+  }
+
+  /* De dagelijkse back-up nu al afvinken: anders kopieert maybeBackupFile bij de
+     schrijfactie hieronder het beschadigde bestand over de goede back-up heen. */
+  try{ await idbSet('backup:'+src.bestand, dateToKey(new Date())); }catch(e){}
+
+  dataCache[id] = norm.data;
+  bumpDataVersion(id);
+  dataFileExists[id] = true;
+  // Mislukt het schrijven, dan meldt syncDataFile dat zelf; de metingen staan dan in de app.
+  if(await syncDataFile(id)) showAlert(`De back-up van ${backup.datum} is teruggezet (${aantal} meting(en)).`);
+  return norm.data;
 }
 
 /* ================= state ================= */
@@ -1778,15 +1839,25 @@ document.getElementById('btn-save-source').addEventListener('click', async ()=>{
 // ===== Android/browser terug-knop: modals sluiten i.p.v. de app verlaten =====
 const modalStack = [];
 let suppressNextPopstate = false;
+/* Wat er bij het openen de focus had, zodat die er na het sluiten weer naartoe
+   gaat. Bij aanraking staat de focus op body; dan is er niets te herstellen. */
+const focusVoorModal = [];
 function pushModal(entry){
   // entry: {close: function(fromBack), isDirty: function()->boolean (optioneel)}
   modalStack.push(entry);
+  const actief = document.activeElement;
+  focusVoorModal.push(actief && actief !== document.body ? actief : null);
   history.pushState({trendsModal: modalStack.length}, '');
+}
+function herstelFocus(){
+  const el = focusVoorModal.pop();
+  if(el && document.contains(el)){ try{ el.focus(); }catch(e){} }
 }
 function popModalForClose(){
   // aanroepen vanuit de EIGEN sluit-weg van een modal (annuleren/opslaan/buiten-klik) — niet vanuit de terug-knop zelf
   if(modalStack.length){
     modalStack.pop();
+    herstelFocus();
     suppressNextPopstate = true;
     history.back();
   }
@@ -1803,7 +1874,50 @@ window.addEventListener('popstate', async ()=>{
     }
   }
   modalStack.pop();
+  herstelFocus();
   top.close(true);
+});
+
+/* ===== Toetsenbord in dialogen =====
+   Escape volgt dezelfde weg als de Android-terugknop: history.back() laat de
+   popstate-afhandeling hierboven het werk doen, inclusief de waarschuwing bij
+   niet-opgeslagen wijzigingen. Zo blijft er één sluitpad in plaats van twee.
+   Bevestigings- en meldingsvensters staan niet in modalStack; daar doet Escape
+   niets, anders sluit de dialoog eronder terwijl de vraag nog openstaat. */
+const FOCUSBAAR = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+function bovensteDialoog(){
+  const open = [...document.querySelectorAll('.modal-overlay')].filter(el=>el.style.display === 'flex');
+  const laatste = open[open.length-1];
+  return laatste ? laatste.querySelector('.modal-box') : null;
+}
+function wachtOpAntwoord(){
+  return ['confirm-overlay','alert-overlay','warn-overlay'].some(id=>{
+    const el = document.getElementById(id);
+    return el && el.style.display === 'flex';
+  });
+}
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape'){
+    if(wachtOpAntwoord() || !modalStack.length) return;
+    e.preventDefault();
+    history.back();
+    return;
+  }
+  if(e.key !== 'Tab') return;
+  // Focus binnen de bovenste dialoog houden; anders loopt Tab erachter door.
+  const box = bovensteDialoog();
+  if(!box) return;
+  const velden = [...box.querySelectorAll(FOCUSBAAR)].filter(el=>el.offsetParent !== null);
+  if(!velden.length) return;
+  const eerste = velden[0], laatste = velden[velden.length-1];
+  if(!box.contains(document.activeElement)){
+    e.preventDefault();
+    (e.shiftKey ? laatste : eerste).focus();
+  }else if(e.shiftKey && document.activeElement === eerste){
+    e.preventDefault(); laatste.focus();
+  }else if(!e.shiftKey && document.activeElement === laatste){
+    e.preventDefault(); eerste.focus();
+  }
 });
 function showConfirm(message, okLabel){
   return new Promise(resolve=>{
@@ -2000,9 +2114,12 @@ async function ensureDataLoaded(id){
     console.error('data lezen mislukt', e);
     dataCache[id] = {}; bumpDataVersion(id);
     // Niet stil leeg laten: anders lijkt een beschadigd bestand gewoon een bron zonder metingen.
-    showAlert(e instanceof SyntaxError
-      ? `${src.bestand} is beschadigd of onleesbaar en kon niet worden ingelezen. Er worden geen metingen getoond. De dagelijkse back-up staat nog in de werkmap.`
-      : `${src.bestand} kon niet worden gelezen: ${e.message}`);
+    if(e instanceof SyntaxError){
+      if(await herstelUitBackup(id)) return; // back-up teruggezet, metingen staan weer in dataCache
+      showAlert(`${src.bestand} is beschadigd of onleesbaar en kon niet worden ingelezen. Er worden geen metingen getoond. De dagelijkse back-up staat nog in de werkmap.`);
+    }else{
+      showAlert(`${src.bestand} kon niet worden gelezen: ${e.message}`);
+    }
   }
 }
 
@@ -4100,13 +4217,77 @@ async function checkAppUpdate(){
   }catch(e){ /* stil: liever geen melding dan een valse */ }
 }
 
-document.getElementById('update-bar').addEventListener('click', ()=>location.reload());
+/* Herladen voor een update mag geen openstaande schrijfactie weggooien zonder
+   dat je weet wát er openstaat. beforeunload vangt het ook, maar met de
+   standaardtekst van de browser, die niets zegt over welke bron het betreft. */
+function openstaandeSchrijfacties(){
+  const namen = [];
+  if(__nietOpgeslagen.has('__meta')) namen.push('instellingen');
+  for(const id of __nietOpgeslagen){
+    if(id === '__meta') continue;
+    const src = getSource(id);
+    namen.push(src && src.titel ? src.titel : id);
+  }
+  return namen;
+}
+async function herlaadVoorUpdate(){
+  if(__pendingWrites > 0){
+    const ok = await showConfirm('Er wordt nu nog opgeslagen. Herladen kan die wijziging kwijtmaken. Toch herladen?', 'Herladen');
+    if(!ok) return;
+  }else{
+    const mislukt = openstaandeSchrijfacties();
+    if(mislukt.length){
+      const ok = await showConfirm(`Niet opgeslagen: ${mislukt.join(', ')}. Bij herladen gaan die wijzigingen verloren. Toch herladen?`, 'Herladen');
+      if(!ok) return;
+    }
+  }
+  location.reload();
+}
+const updateBar = document.getElementById('update-bar');
+updateBar.addEventListener('click', herlaadVoorUpdate);
+// De balk heeft role="button", dus Enter en spatie moeten hem ook activeren
+updateBar.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar'){ e.preventDefault(); herlaadVoorUpdate(); }
+});
+
+/* Een tabblad dat dagen open staat haalt trends.html nooit opnieuw op, dus de
+   cache ververst niet en checkAppUpdate ziet nooit een nieuwer stempel.
+   registration.update() laat de browser de service worker opnieuw vergelijken;
+   die vult bij een nieuwe versie de cache, waarna de controle hem wel ziet.
+   Afgeknepen, zodat tabwisselen geen netwerkverkeer per keer oplevert. */
+const SW_UPDATE_INTERVAL = 30 * 60 * 1000;
+let __swUpdateLaatst = 0;
+let __swRegistratie = null;
+function vraagSwUpdate(){
+  if(!__swRegistratie) return false;
+  const nu = Date.now();
+  if(nu - __swUpdateLaatst < SW_UPDATE_INTERVAL) return false;
+  __swUpdateLaatst = nu;
+  __swRegistratie.update().catch(()=>{}); // mislukken mag: dan blijft de huidige versie staan
+  return true;
+}
+
 setTimeout(checkAppUpdate, 4000);
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) checkAppUpdate(); });
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden) return;
+  vraagSwUpdate();
+  checkAppUpdate();
+});
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('sw-trends.js').catch(e=>console.error('SW registratie mislukt', e));
+    navigator.serviceWorker.register('sw-trends.js')
+      .then(reg=>{
+        __swRegistratie = reg;
+        __swUpdateLaatst = Date.now(); // registratie zelf controleert al
+        reg.addEventListener('updatefound', ()=>{
+          const sw = reg.installing;
+          if(!sw) return;
+          // Pas controleren als de nieuwe versie in de cache staat, anders ziet checkAppUpdate niets
+          sw.addEventListener('statechange', ()=>{ if(sw.state === 'installed') checkAppUpdate(); });
+        });
+      })
+      .catch(e=>console.error('SW registratie mislukt', e));
   });
 }
 </script>
