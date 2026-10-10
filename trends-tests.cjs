@@ -395,25 +395,51 @@ kop('11. Updatemelding en herladen');
     let __pendingWrites = 0;
     const __nietOpgeslagen = new Set();
     const getSource = () => null;
+    let __herladen = false;
+    let __swRegistratie = null;
+    let berichten = [], controllerLuisteraars = [];
+    const navigator = {serviceWorker: {addEventListener: (t, f)=>{ controllerLuisteraars.push([t, f]); }}};
+    const setTimeout = () => {}; // de uiterste terugval apart getest
     eval(haal('openstaandeSchrijfacties'));
+    eval(haal('herlaadNu'));
+    eval(haal('herlaadMetWachtendeWorker'));
     eval(haal('herlaadVoorUpdate'));
+    const opnieuw = ()=>{ __herladen = false; };
 
     await herlaadVoorUpdate();
     ok('niets open: herladen zonder vraag', herladen === 1 && gevraagd === null);
 
-    __pendingWrites = 1; gevraagd = null;
+    opnieuw(); __pendingWrites = 1; gevraagd = null;
     await herlaadVoorUpdate();
     ok('lopende schrijfactie: eerst bevestigen', gevraagd !== null && /nog opgeslagen/.test(gevraagd));
     ok('na bevestiging wordt herladen', herladen === 2);
 
-    antwoord = false; gevraagd = null;
+    opnieuw(); antwoord = false; gevraagd = null;
     await herlaadVoorUpdate();
     ok('annuleren laat de pagina staan', herladen === 2 && gevraagd !== null);
 
-    __pendingWrites = 0; antwoord = true; gevraagd = null;
+    opnieuw(); __pendingWrites = 0; antwoord = true; gevraagd = null;
     __nietOpgeslagen.add('b9');
     await herlaadVoorUpdate();
     ok('mislukte schrijfactie wordt in de vraag benoemd', /b9/.test(gevraagd || ''), gevraagd);
+
+    /* Met een wachtende worker mag er niet meteen worden herladen: de oude worker
+       beheert de pagina nog en zou dezelfde versie opnieuw leveren. */
+    opnieuw(); __nietOpgeslagen.clear(); herladen = 0; berichten = []; controllerLuisteraars = [];
+    __swRegistratie = {waiting: {postMessage: (m)=>berichten.push(m)}};
+    await herlaadVoorUpdate();
+    ok('wachtende worker: nog niet herladen', herladen === 0);
+    ok('maar wel om overstappen gevraagd', berichten.length === 1 && berichten[0].type === 'nuOverstappen', JSON.stringify(berichten));
+    ok('en er wordt op controllerchange gewacht', controllerLuisteraars.some(([t]) => t === 'controllerchange'));
+    controllerLuisteraars.filter(([t]) => t === 'controllerchange').forEach(([, f]) => f());
+    ok('na het overnemen wordt herladen', herladen === 1);
+    controllerLuisteraars.filter(([t]) => t === 'controllerchange').forEach(([, f]) => f());
+    ok('en niet twee keer', herladen === 1);
+
+    // zonder wachtende worker is een gewone herlaadactie genoeg
+    opnieuw(); herladen = 0; berichten = []; __swRegistratie = {waiting: null};
+    await herlaadVoorUpdate();
+    ok('geen wachtende worker: direct herladen', herladen === 1 && berichten.length === 0);
   }
 
   // afknijpen van registration.update()
@@ -438,7 +464,12 @@ kop('11. Updatemelding en herladen');
     ok('updatebalk reageert op het toetsenbord', /updateBar\.addEventListener\('keydown'/.test(SCRIPT));
     ok('Enter en spatie activeren de balk', /e\.key === 'Enter' \|\| e\.key === ' '/.test(SCRIPT));
     ok('visibilitychange vraagt een serviceworker-update', /vraagSwUpdate\(\);\s*\n\s*checkAppUpdate\(\);/.test(SCRIPT));
-    ok('nieuwe versie geïnstalleerd = meteen controleren', /updatefound/.test(SCRIPT) && /state === 'installed'/.test(SCRIPT));
+    ok('nieuwe versie geïnstalleerd = meteen melden of controleren',
+       /updatefound/.test(SCRIPT) && /sw\.state !== 'installed'/.test(SCRIPT));
+    ok('een wachtende versie is zelf al het bewijs', /if\(reg\.waiting\) toonUpdateBalk\(\); else checkAppUpdate\(\);/.test(SCRIPT));
+    ok('een versie die uit een eerdere sessie wacht wordt ook gemeld', /if\(reg\.waiting\) toonUpdateBalk\(\);\n/.test(SCRIPT));
+    ok('geen skipWaiting meer bij het installeren', !/self\.skipWaiting\(\);/.test(SW.split("addEventListener('message'")[0]));
+    ok('skipWaiting alleen nog op verzoek van de app', /'nuOverstappen'\) self\.skipWaiting\(\)/.test(SW));
   }
 
   await deel12();
@@ -933,14 +964,38 @@ const vraagVan = (env) => async (url, mode, method = 'GET') => {
   const bestand = await vraag(env.ORIGIN + '/icon.svg', 'no-cors');
   ok('een gewoon bestand krijgt geen HTML-pagina', !!bestand && !/text\/html/.test(bestand.headers.get('Content-Type')));
 }
-// een onbekende pagina offline valt terug op de bewaarde app
+/* Een eigen pad waarvan de cacheregel weg is, valt terug op de bewaarde app. Dit is
+   het scenario waarin de browser onder opslagdruk een deel van de cache opruimt: de
+   map-URL is weg, trends.html staat er nog. */
 {
   const env = swOmgeving();
   await installeer(env);
+  env.store.get(huidige).delete(env.abs('./'));
   env.zetOffline();
-  const onbekend = await vraagVan(env)(env.ORIGIN + '/nog-niet-bestaand.html', 'navigate');
-  ok('onbekende pagina offline valt terug op de bewaarde app', !!onbekend && onbekend.status === 200, onbekend && onbekend.status);
+  const map = await vraagVan(env)(env.ORIGIN + '/', 'navigate');
+  ok('eigen pad zonder cacheregel valt terug op de bewaarde app', !!map && map.status === 200, map && map.status);
 }
+// eigen-padenfilter: alleen de vijf bestanden van Trends gaan door deze worker
+{
+  const env = swOmgeving();
+  await installeer(env);
+  const onderschept = async (url, mode) => {
+    let antwoord = null;
+    env.handlers.fetch[0]({request: {method: 'GET', url, mode}, respondWith: x => antwoord = x, waitUntil(){}});
+    if (antwoord) await antwoord;
+    return antwoord !== null;
+  };
+  ok('eigen bestand wordt onderschept', await onderschept(env.ORIGIN + '/trends.html', 'navigate'));
+  ok('eigen bestand met query ook', await onderschept(env.ORIGIN + '/trends.html?x=1', 'navigate'));
+  ok('bestand van Golf Score niet', !(await onderschept(env.ORIGIN + '/golf-score.html', 'navigate')));
+  ok('bestand van Events niet', !(await onderschept(env.ORIGIN + '/events.html', 'navigate')));
+  ok('onbekend pad op de eigen origin niet', !(await onderschept(env.ORIGIN + '/iets-anders.json', 'no-cors')));
+  ok('ander domein niet', !(await onderschept('https://cdn.example.com/x.js', 'no-cors')));
+  ok('niets van buiten in de Trends-cache',
+     [...env.store.get(huidige).keys()].every(k => /\/(index\.html|trends\.html|manifest\.json|icon\.svg)$|\/$/.test(k)),
+     [...env.store.get(huidige).keys()].join(' '));
+}
+
 // cacheopslag geweigerd: wel een antwoord, geen crash
 {
   const env = swOmgeving({cacheStuk: true});

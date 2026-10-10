@@ -19,7 +19,7 @@
    De installatie slaagt alleen als trends.html binnen is. De andere bestanden
    mogen mislukken; die worden later door de achtergrondverversing aangevuld. */
 
-const CACHE_VERSION = 'trends-v16';
+const CACHE_VERSION = 'trends-v17';
 
 /* Zonder dit bestand is er niets om offline te openen, dus dit moet slagen. */
 const VERPLICHT = ['./trends.html'];
@@ -27,6 +27,17 @@ const VERPLICHT = ['./trends.html'];
    manifest en icoon zijn voor het installeren als app. Niet elke server
    antwoordt op een kale map-URL, en dan zou die ene de hele update blokkeren. */
 const OPTIONEEL = ['./', './index.html', './manifest.json', './icon.svg'];
+const ASSETS = VERPLICHT.concat(OPTIONEEL);
+
+/* De eigen bestanden als pad. Het bereik van deze worker is de hele origin,
+   want in de root staan ook Golf Score en Events. Zonder dit filter trok Trends
+   hun bestanden in zijn eigen cache, en die ruimt de browser bij een nieuwe
+   versie van Trends weer op. Een origin-controle alleen is daarvoor te grof. */
+function volledig(u) { return new URL(u, self.location.href); }
+const EIGEN_PADEN = ASSETS.map((u) => volledig(u).pathname);
+function isEigen(url) {
+  return url.origin === self.location.origin && EIGEN_PADEN.indexOf(url.pathname) >= 0;
+}
 
 /* cache:'reload' zodat de installatie geen verouderde kopie uit de
    browsercache overneemt. Een mislukking komt terug als null, zodat de
@@ -94,8 +105,17 @@ self.addEventListener('install', (event) => {
           )
         )
     )
+    /* Geen skipWaiting: een nieuwe versie neemt een open app niet onder handen
+       terwijl er misschien iets niet is opgeslagen. De app ziet dat er een versie
+       wacht, meldt dat met de updatebalk, en vraagt er zelf om zodra alles op
+       schijf staat — zie de message-handler hieronder. */
   );
-  self.skipWaiting();
+});
+
+/* De gebruiker klikte op herladen en er staat niets meer open: pas dan mag een
+   wachtende worker het overnemen. */
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'nuOverstappen') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -115,8 +135,8 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   let url;
   try { url = new URL(event.request.url); } catch (e) { return; }
-  // Alleen eigen bestanden: verzoeken naar een andere origin horen niet in de Trends-cache.
-  if (url.origin !== self.location.origin) return;
+  // Niet van deze app: laten gaan alsof er geen service worker is.
+  if (!isEigen(url)) return;
 
   /* Een navigatie met een query-string (trends.html?iets=1) is dezelfde pagina, maar de
      Cache API neemt de query mee in de sleutel. Zonder ignoreSearch mist zo'n verzoek de

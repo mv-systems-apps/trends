@@ -336,7 +336,7 @@
       <div class="empty" id="source-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
       <div class="source-list" id="source-list" style="max-height:60vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;"></div>
       <div class="empty" id="source-empty" style="display:none;">Nog geen bronnen. Koppel eerst een metadatabestand hierboven.</div>
-      <div id="app-version-stamp">Versie 13527D4-006</div>
+      <div id="app-version-stamp">Versie 13527D4-007</div>
     </div>
 
     <div id="source-modal-overlay" class="modal-overlay" style="display:none;">
@@ -4177,6 +4177,12 @@ const CACHE_PREFIX = 'trends-';
 const VERSION_RE = /Versie ([0-9A-F]+-[0-9A-F]+)/;
 let updateBarShown = false;
 
+function toonUpdateBalk(){
+  if(updateBarShown) return;
+  updateBarShown = true;
+  document.getElementById('update-bar').style.display = 'flex';
+}
+
 function currentVersionStamp(){
   const el = document.getElementById('app-version-stamp');
   const m = el && el.textContent.match(VERSION_RE);
@@ -4210,10 +4216,7 @@ async function checkAppUpdate(){
     const cur = currentVersionStamp();
     if(!cur) return;
     const cached = await cachedVersionStamp();
-    if(cached && cached > cur){
-      document.getElementById('update-bar').style.display = 'flex';
-      updateBarShown = true;
-    }
+    if(cached && cached > cur) toonUpdateBalk();
   }catch(e){ /* stil: liever geen melding dan een valse */ }
 }
 
@@ -4230,6 +4233,25 @@ function openstaandeSchrijfacties(){
   }
   return namen;
 }
+/* Herladen met een wachtende service worker vraagt een extra stap. De oude
+   worker beheert deze pagina nog, dus een gewone herlaadactie levert opnieuw de
+   oude cache en blijft de updatebalk terugkomen. Daarom eerst de wachtende
+   worker laten overnemen en pas herladen als dat gebeurd is. Komt dat bericht
+   niet, dan na 3 s toch herladen: liever een herlaadactie zonder effect dan een
+   knop die niets doet. */
+let __herladen = false;
+function herlaadNu(){
+  if(__herladen) return;
+  __herladen = true;
+  location.reload();
+}
+function herlaadMetWachtendeWorker(){
+  const wachtend = __swRegistratie && __swRegistratie.waiting;
+  if(!wachtend){ herlaadNu(); return; }
+  navigator.serviceWorker.addEventListener('controllerchange', herlaadNu, {once: true});
+  setTimeout(herlaadNu, 3000);
+  wachtend.postMessage({type: 'nuOverstappen'});
+}
 async function herlaadVoorUpdate(){
   if(__pendingWrites > 0){
     const ok = await showConfirm('Er wordt nu nog opgeslagen. Herladen kan die wijziging kwijtmaken. Toch herladen?', 'Herladen');
@@ -4241,7 +4263,7 @@ async function herlaadVoorUpdate(){
       if(!ok) return;
     }
   }
-  location.reload();
+  herlaadMetWachtendeWorker();
 }
 const updateBar = document.getElementById('update-bar');
 updateBar.addEventListener('click', herlaadVoorUpdate);
@@ -4280,11 +4302,18 @@ if('serviceWorker' in navigator){
       .then(reg=>{
         __swRegistratie = reg;
         __swUpdateLaatst = Date.now(); // registratie zelf controleert al
+        // Staat er al een versie te wachten van een eerdere sessie, dan meteen melden
+        if(reg.waiting) toonUpdateBalk();
         reg.addEventListener('updatefound', ()=>{
           const sw = reg.installing;
           if(!sw) return;
-          // Pas controleren als de nieuwe versie in de cache staat, anders ziet checkAppUpdate niets
-          sw.addEventListener('statechange', ()=>{ if(sw.state === 'installed') checkAppUpdate(); });
+          /* Pas bij 'installed' staat de nieuwe versie in haar eigen cache. Wacht ze
+             op activatie, dan is dat zelf al het bewijs van een nieuwe versie; anders
+             beslist de stempelvergelijking. */
+          sw.addEventListener('statechange', ()=>{
+            if(sw.state !== 'installed') return;
+            if(reg.waiting) toonUpdateBalk(); else checkAppUpdate();
+          });
         });
       })
       .catch(e=>console.error('SW registratie mislukt', e));
