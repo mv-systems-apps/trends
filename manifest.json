@@ -1,0 +1,20 @@
+{
+  "name": "Trends",
+  "short_name": "Trends",
+  "description": "Trend data analyseren, bewerken en visualiseren als controlekaart.",
+  "start_url": "./trends.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1417",
+  "theme_color": "#0f1417",
+  "lang": "nl",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
