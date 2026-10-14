@@ -3,7 +3,20 @@
    Draaien met:  node trends-tests.cjs   (vanuit dezelfde map als trends.html en sw-trends.js)
 
    De tests halen de functies letterlijk uit trends.html, zodat ze niet uit de pas kunnen
-   lopen met de app. Browsergedrag (scrollen, dialogen, DOM) wordt hier NIET getest. */
+   lopen met de app. Browsergedrag (scrollen, dialogen, DOM) wordt hier NIET getest.
+
+   De groepen hangen aan elkaar: groep 6 is asynchroon en roept aan het eind vervolg()
+   aan, die roept deel8() aan, en zo verder. Dat betekent dat een groep die omvalt de
+   groepen erna meesleept. Daar is nu een vangnet voor -- een niet-opgevangen fout wordt
+   als mislukte controle geteld, de eindregel verschijnt altijd, en die meldt hoeveel van
+   de 19 groepen werkelijk hebben gedraaid. Zonder dat vangnet eindigde een mislukte run
+   met alleen een stacktrace: de bundel stopte bij groep 6 van de 19, en omdat de
+   exitcode in een pijp niet opvalt, las dat als 'niets mislukt'.
+
+   Valt een groep om in zijn SYNCHRONE deel (bijvoorbeeld bij het bouwen van de
+   zandbak), dan is de ketting daar werkelijk afgebroken en draaien de groepen erna
+   niet; de eindregel zegt dan tot hoever het kwam. Dat herstellen vraagt een andere
+   opzet van de bundel en is bewust niet gedaan. */
 
 const fs = require('fs');
 const path = require('path');
@@ -11,15 +24,29 @@ const HTML = fs.readFileSync(path.join(__dirname, 'trends.html'), 'utf8');
 const SW   = fs.readFileSync(path.join(__dirname, 'sw-trends.js'), 'utf8');
 const SCRIPT = HTML.match(/<script>([\s\S]*)<\/script>/)[1];
 
+/* Een functie letterlijk uit de app halen. De app schrijft de sluitaccolade van
+   een functie met meer regels op kolom 0; een functie van EEN regel sluit op die
+   regel zelf. Beide gevallen apart, want een greep tot de volgende '\n}' slokt
+   bij een functie van een regel de hele volgende functie mee -- en dan draait er
+   stil iets anders dan de naam belooft. De controle erna vangt zo'n misgreep: in
+   het stuk mag maar een functiekop staan. Dezelfde opzet als in
+   events-tests.cjs, waar deze misgreep eerder is opgetreden. */
 const haal = naam => {
-  const m = SCRIPT.match(new RegExp('^(?:async )?function ' + naam + '\\([\\s\\S]*?\\n\\}', 'm'));
-  if (!m) throw new Error('functie niet gevonden in trends.html: ' + naam);
-  return m[0];
+  const kop_ = new RegExp('^(?:async )?function ' + naam + '\\s*\\(', 'm').exec(SCRIPT);
+  if (!kop_) throw new Error('functie niet gevonden in trends.html: ' + naam);
+  const eersteRegel = SCRIPT.slice(kop_.index, SCRIPT.indexOf('\n', kop_.index));
+  const tel = (t, c) => t.split(c).length - 1;
+  const stuk = (tel(eersteRegel, '{') > 0 && tel(eersteRegel, '{') === tel(eersteRegel, '}'))
+    ? eersteRegel
+    : SCRIPT.slice(kop_.index, SCRIPT.indexOf('\n}', kop_.index) + 2);
+  const koppen = (stuk.match(/^(?:async )?function (\w+)/gm) || []);
+  if (koppen.length !== 1) throw new Error('greep te ruim bij ' + naam + ': ' + koppen.join(', '));
+  return stuk;
 };
 const KERN = ['keyToDate','keyToTimeMinutes','dateToKey','geldigeSleutel','getFlatEntries',
   'aggregateDayValue','getDailyFromFlat','normalizeDataKeys','dataFileObj','computeMeanSigma',
   'computeRBar','todayUTCDate','getWeekStart','getMonthStart','getQuarterStart','getYearStart','getGroupEnd',
-  'aggregatePoints'].map(haal).join('\n');
+  'aggregatePoints','fmtDateNL'].map(haal).join('\n');
 eval(KERN);
 
 let goed = 0, fout = 0;
@@ -27,7 +54,45 @@ const ok = (naam, voorwaarde, extra='') => {
   if (voorwaarde) { goed++; console.log('  OK   ' + naam + (extra ? '  — ' + extra : '')); }
   else { fout++; console.log('  FOUT ' + naam + (extra ? '  — ' + extra : '')); }
 };
-const kop = t => console.log('\n' + t);
+let groepen = 0;
+const kop = t => { groepen++; console.log('\n' + t); };
+const GROEPEN_VERWACHT = 19;
+
+/* De eindregel op een plek, zodat hij ook verschijnt als de bundel onderweg
+   omvalt. Anders eindigt een mislukte run met alleen een stacktrace, en dat
+   leest als 'niets mislukt' -- precies wat hier gebeurde: de bundel stopte bij
+   groep 6 van de 19 en niemand zag het. */
+let afgerond = false;
+function eindregel(){
+  if (afgerond) return;
+  afgerond = true;
+  console.log('\n' + '='.repeat(60));
+  if (groepen !== GROEPEN_VERWACHT) {
+    fout++;
+    console.log('  FOUT de bundel liep niet tot het eind  — ' + groepen + ' van de ' +
+                GROEPEN_VERWACHT + ' groepen gedraaid');
+  } else {
+    console.log('alle ' + GROEPEN_VERWACHT + ' groepen hebben gedraaid');
+  }
+  console.log(goed + ' geslaagd, ' + fout + ' mislukt');
+  console.log('NIET getest (vereist een browser of toestel): scrollen, DOM-weergave,');
+  console.log('schermlezer en focusvolgorde, of de serviceworker werkelijk een nieuwe');
+  console.log('versie ophaalt, een gedwongen afsluiting door Android, ontbrekende');
+  console.log('maptoestemming en een werkelijk volle opslag.');
+  process.exit(fout ? 1 : 0);
+}
+
+/* Een afgewezen belofte die niemand opvangt sluit node af. Hier wordt dat eerst
+   als mislukte controle geteld en daarna netjes afgerond, zodat te zien is WAAR
+   het omviel en wat er tot dat punt al niet klopte. */
+function omgevallen(waar, e){
+  fout++;
+  console.log('  FOUT ' + waar + '  — ' + ((e && e.message) || e));
+  if (e && e.stack) console.log('       ' + String(e.stack).split('\n')[1].trim());
+  eindregel();
+}
+process.on('unhandledRejection', (e) => omgevallen('een afgewezen belofte is niet opgevangen', e));
+process.on('uncaughtException', (e) => omgevallen('een uitzondering is niet opgevangen', e));
 const bijna = (a, b, marge=1e-9) => Math.abs(a - b) < marge;
 
 /* Nagebootste serviceworker-omgeving met de echte semantiek van de Cache API:
@@ -218,13 +283,22 @@ kop('6. Mislukte schrijfactie wordt teruggedraaid');
   const t = new Function('env', [
     'const dataCache = {b: {D20261001T1200: 80}}; const dataFileExists = {}; const dirHandle = {};',
     'const dataVersion = {}; const derivedCache = new Map();',
+    /* De gedeelde toestand waar de mutatiegroepen op rusten, uitdrukkelijk hier
+       en niet geleend van een eerdere zandbak: anders hangt deze groep ervan af
+       dat een andere groep die namen heeft laten rondslingeren. */
+    'let __huidigeGroep = null; let __groepTeller = 0;',
+    'const __gelukteSchrijf = {}; const __laatsteSchrijver = new Map();',
     'function getSource(){ return {bestand:"B.json", titel:"Bron B"}; }',
     'function dataFileObj(d){ return d; }',
     'function showAlert(m){ env.meldingen.push(m); }',
     'function renderDataView(){ env.renders++; }',
     'async function writeJsonToDir(){ if(env.faalt) throw new Error("geen ruimte"); }',
-    haal('bumpDataVersion'),
-    haal('beginMutatie'), haal('onthoudVorige'), haal('draaiMutatieTerug'),
+    haal('bumpDataVersion'), haal('sleutelVan'),
+    /* vergeetGroep ontbrak, terwijl draaiMutatieTerug hem aanroept. Daardoor
+       wierp de eerste mislukte schrijfactie 'vergeetGroep is not defined' en
+       stopte de hele bundel bij groep 6 van de 19. */
+    haal('beginMutatie'), haal('onthoudVorige'),
+    haal('vergeetGroep'), haal('draaiMutatieTerug'),
     haal('setMeting'), haal('deleteMeting'),
     haal('syncDataFile'), haal('bewaarMeting'),
     'return {dataCache, beginMutatie, setMeting, deleteMeting, syncDataFile, bewaarMeting,',
@@ -270,7 +344,12 @@ kop('6. Mislukte schrijfactie wordt teruggedraaid');
     t.setMeting('b', 'D20261003T1200', 85);
     ok('bij succes geeft bewaarMeting true', await t.bewaarMeting('b', groep, '85') === true);
     ok('en blijft de waarde staan', t.dataCache.b.D20261003T1200 === 85);
-    ok('de teller van geslaagde schrijfacties loopt op', t.gelukt().b === 1, t.gelukt().b);
+    /* Geen teller van schrijfacties maar het HOOGSTE weggeschreven groepsnummer
+       -- zo staat het ook in trends.html, met de reden: dat een latere
+       schrijfactie slaagde zegt niets als diens momentopname deze wijziging nog
+       niet bevatte. Daarop rust het 'niet terugdraaien' hieronder. */
+    ok('de bron onthoudt tot welke groep er werkelijk is weggeschreven',
+       t.gelukt().b === groep.nr, t.gelukt().b + ' (groep ' + groep.nr + ')');
 
     /* Mislukt een schrijfactie maar slaagt er daarna alsnog een voor dezelfde bron,
        dan staat de waarde tóch in het bestand en mag er niet worden teruggedraaid. */
@@ -286,7 +365,13 @@ kop('6. Mislukte schrijfactie wordt teruggedraaid');
     ok('en dat wordt anders gemeld', /mogelijk klopt die niet/.test(env.meldingen[0] || ''), env.meldingen[0]);
 
     vervolg();
-  })();
+  })().catch((e) => {
+    /* Valt deze groep om, dan tellen we dat als mislukte controle en gaan we
+       door met de groepen erna: die hebben er niets mee te maken. */
+    fout++;
+    console.log('  FOUT groep 6 viel om  — ' + ((e && e.message) || e));
+    vervolg();
+  });
 }
 
 function vervolg(){
@@ -305,7 +390,11 @@ kop('7. Mislukte back-up');
     }
   };
   const t = new Function('env', 'dirHandle', [
+    /* dateToKey is hier een stub met een vaste dag, zodat 'een back-up per dag'
+       te toetsen is; todayUTCDate komt echt uit de app, want die werd
+       aangeroepen en ontbrak -- daarop viel groep 7 om. */
     'function dateToKey(){ return "20261009"; }',
+    haal('todayUTCDate'),
     'function backupFilename(n){ const d=n.lastIndexOf("."); return n.slice(0,d)+"_backup"+n.slice(d); }',
     'async function idbGet(k){ return env.idb.get(k) ?? null; }',
     'async function idbSet(k,v){ env.idb.set(k,v); }',
@@ -463,29 +552,49 @@ kop('11. Updatemelding en herladen');
     let __swRegistratie = null;
     let berichten = [], controllerLuisteraars = [];
     const navigator = {serviceWorker: {addEventListener: (t, f)=>{ controllerLuisteraars.push([t, f]); }}};
-    const setTimeout = () => {}; // de uiterste terugval apart getest
+    /* De echte setTimeout, want wachtOpSchrijfacties polst daarmee; met een
+       lege stub zou die belofte nooit uitkomen en bleef de groep hangen. De
+       wachttijd gaat hier wel omlaag van 10 s naar 40 ms: het gaat om het
+       mechanisme, niet om het getal. */
+    const HERLAAD_WACHT = 40;
+    let gemeld = null;
+    const showAlert = (m)=>{ gemeld = m; };
+    eval(haal('wachtOpSchrijfacties'));
     eval(haal('herlaadNu'));
     eval(haal('herlaadMetWachtendeWorker'));
     eval(haal('herlaadVoorUpdate'));
     const opnieuw = ()=>{ __herladen = false; };
 
     await herlaadVoorUpdate();
-    ok('niets open: herladen zonder vraag', herladen === 1 && gevraagd === null);
+    ok('niets open: herladen zonder vraag', herladen === 1 && gemeld === null);
 
-    opnieuw(); __pendingWrites = 1; gevraagd = null;
-    await herlaadVoorUpdate();
-    ok('lopende schrijfactie: eerst bevestigen', gevraagd !== null && /nog opgeslagen/.test(gevraagd));
-    ok('na bevestiging wordt herladen', herladen === 2);
+    /* De kern van de huidige werkwijze: een schrijfactie die binnen de wachttijd
+       klaar is, wordt afgewacht en daarna wordt er gewoon herladen -- zonder de
+       gebruiker iets te vragen. Met de oude "mag dit sneuvelen?"-vraag zou hier
+       een vraag staan. */
+    opnieuw(); __pendingWrites = 1; gemeld = null;
+    const bijna_klaar = herlaadVoorUpdate();
+    setTimeout(()=>{ __pendingWrites = 0; }, 5);
+    await bijna_klaar;
+    ok('een schrijfactie die klaarkomt wordt afgewacht, en dan wordt er herladen',
+       herladen === 2 && gemeld === null, 'herladen ' + herladen);
 
-    opnieuw(); antwoord = false; gevraagd = null;
+    /* Komt de schrijfactie niet klaar -- bijvoorbeeld omdat er binnen de
+       schrijfactie een conflictvraag openstaat -- dan gebeurt er NIETS en komt
+       er een melding. De updatebalk blijft staan, dus herladen kan daarna
+       alsnog; er sneuvelt niets. */
+    opnieuw(); __pendingWrites = 1; gemeld = null;
     await herlaadVoorUpdate();
-    ok('annuleren laat de pagina staan', herladen === 2 && gevraagd !== null);
+    ok('een schrijfactie die blijft hangen: niet herladen', herladen === 2);
+    ok('en dat wordt gemeld', /nog opgeslagen/.test(gemeld || ''), gemeld);
+    ok('er is niets gevraagd: de app wacht in plaats van te vragen', gevraagd === null);
 
     /* Er is geen test meer voor "niet opgeslagen bij herladen": een mislukte
        schrijfactie wordt teruggedraaid, dus zo'n wijziging bestaat niet meer. */
-    opnieuw(); __pendingWrites = 0; antwoord = true; gevraagd = null;
+    opnieuw(); __pendingWrites = 0; antwoord = true; gevraagd = null; gemeld = null;
     await herlaadVoorUpdate();
-    ok('niets open: herladen zonder vraag, ook na een eerdere mislukking', gevraagd === null);
+    ok('niets open: herladen zonder vraag, ook na een eerdere mislukking',
+       gevraagd === null && gemeld === null);
 
     /* Met een wachtende worker mag er niet meteen worden herladen: de oude worker
        beheert de pagina nog en zou dezelfde versie opnieuw leveren. */
@@ -580,7 +689,12 @@ const omgeving = (bestanden, antwoord, falend) => {
     await w.close();
     return true;
   };
-  const fn = new Function('ctx', 'normalizeDataKeys', 'dataFileObj', 'fmtDateNL', 'dateToKey', `
+  /* todayUTCDate hoort hier echt bij: herstelUitBackup vinkt de dagelijkse
+     back-up af met dateToKey(todayUTCDate()), en dat staat in een try/catch.
+     Zonder deze functie wierp die regel een ReferenceError die de app zelf
+     opslokte -- het afvinken gebeurde dan niet, en de controle daarop keek naar
+     iets wat nooit was gebeurd. */
+  const fn = new Function('ctx', 'normalizeDataKeys', 'dataFileObj', 'fmtDateNL', 'dateToKey', 'todayUTCDate', `
     const {dirHandle, dataCache, dataFileExists, getSource, showConfirm, showAlert, idbSet, bumpDataVersion, syncDataFile} = ctx;
     ${haal('backupFilename')}
     ${haal('beschadigdFilename')}
@@ -588,7 +702,7 @@ const omgeving = (bestanden, antwoord, falend) => {
     ${haal('herstelUitBackup')}
     return herstelUitBackup;
   `);
-  return {ctx, herstel: fn(ctx, normalizeDataKeys, dataFileObj, fmtDateNL, dateToKey)};
+  return {ctx, herstel: fn(ctx, normalizeDataKeys, dataFileObj, fmtDateNL, dateToKey, todayUTCDate)};
 };
 
 const GOED = JSON.stringify({D20261001T1200: 80, D20261002T1200: 81});
@@ -618,7 +732,11 @@ const KAPOT = '{"D20261001T1200": 80,';
   ok('beschadigd bestand blijft bewaard', ctx.dirHandle.map.get('gewicht_beschadigd.json') === KAPOT);
   ok('databestand is weer leesbaar', JSON.parse(ctx.dirHandle.map.get('gewicht.json')).D20261001T1200 === 80);
   ok('back-up zelf blijft ongemoeid', ctx.dirHandle.map.get('gewicht_backup.json') === GOED);
-  ok('dataCache gevuld en bestand bestaat', Object.keys(ctx.dataCache.b1).length === 2 && ctx.dataFileExists.b1 === true);
+  /* De tweede helft van deze controle keek naar dataFileExists, en die variabele
+     komt in trends.html niet meer voor; die kon dus nooit meer kloppen. Wat
+     ertoe doet is dat de teruggezette metingen in de app staan. */
+  ok('de teruggezette metingen staan in de app', Object.keys(ctx.dataCache.b1).length === 2,
+     Object.keys(ctx.dataCache.b1).join());
   ok('dagelijkse back-up afgevinkt vóór het schrijven',
      ctx.schrijfOrde.join('>') === 'idb>schrijf' && ctx.idbSleutels[0] === 'backup:gewicht.json', ctx.schrijfOrde.join('>'));
   ok('melding bevestigt het herstel', /teruggezet/.test(ctx.meldingen.join(' ')));
@@ -770,8 +888,17 @@ eval(haal('slugify'));
 
 // verwijderen ruimt alle sporen van de bron op
 {
-  ok('verwijderen wist dataCache, afgeleide cache en bestandsvlag',
-     /delete dataCache\[id\];[\s\S]{0,120}derivedCache\.delete\(id\);[\s\S]{0,80}delete dataFileExists\[id\];/.test(SCRIPT));
+  /* Deze controle eiste 'delete dataFileExists[id];' binnen een venster van 120
+     tekens achter delete dataCache[id]. Die variabele bestaat niet meer, en het
+     venster brak bij elke regel ertussen. Nu op de functie zelf, per spoor dat
+     opgeruimd hoort te worden -- de bumpDataVersion hoort erbij, want zonder die
+     blijft de afgeleide cache van een verwijderde bron hergebruikt worden. */
+  const wissen = haal('deleteSource');
+  ok('verwijderen haalt de bron uit de metadata',
+     /bronnen = bronnen\.filter\(x=>x\.id!==id\);/.test(wissen) && /syncMetaFile\(\)/.test(wissen));
+  ok('en wist de metingen, de versie en de afgeleide cache',
+     /delete dataCache\[id\];/.test(wissen) && /bumpDataVersion\(id\);/.test(wissen) &&
+     /derivedCache\.delete\(id\);/.test(wissen));
   ok('verwijderen laat het gegevensbestand staan', /blijft ongewijzigd in de werkmap staan/.test(SCRIPT));
 }
 
@@ -933,12 +1060,20 @@ kop('17. Toegankelijkheid en toetsenbordbediening');
   const knopB = {naam: 'B', focus(){ gefocust.push('B'); }};
   let gefocust = [];
   const body = {};
-  const document = {activeElement: body, body, contains: () => true};
+  const document = {activeElement: body, body, contains: () => true,
+                    querySelectorAll: () => []};
   const history = {pushState(){}, back(){}};
   const modalStack = [];
   const focusVoorModal = [];
   let suppressNextPopstate = false;
-  eval(haal('pushModal') + '\n' + haal('herstelFocus') + '\n' + haal('popModalForClose'));
+  /* pushModal focust ook de doos van de bovenste dialoog; die komt uit de DOM en
+     die is hier niet nagemaakt. Deze groep gaat over de FOCUSSTAPEL, dus de
+     echte bovensteDialoog() krijgt met querySelectorAll: () => [] netjes 'geen
+     dialoog' terug, in plaats van om te vallen op een ontbrekende functie --
+     waarop de bundel eerder bij groep 17 van de 19 stopte. Dat die doos
+     werkelijk focus krijgt, is browsergedrag en staat in de lijst hieronder. */
+  eval(haal('bovensteDialoog') + '\n' + haal('pushModal') + '\n' +
+       haal('herstelFocus') + '\n' + haal('popModalForClose'));
 
   document.activeElement = knopA;
   pushModal({close(){}});
@@ -1249,11 +1384,5 @@ const vraagVan = (env) => async (url, mode, method = 'GET') => {
   ok('online met lege cache levert gewoon het netwerkantwoord', !!res && res.status === 200);
 }
 
-console.log('\n' + '='.repeat(60));
-console.log(goed + ' geslaagd, ' + fout + ' mislukt');
-console.log('NIET getest (vereist een browser of toestel): scrollen, DOM-weergave,');
-console.log('schermlezer en focusvolgorde, of de serviceworker werkelijk een nieuwe');
-console.log('versie ophaalt, een gedwongen afsluiting door Android, ontbrekende');
-console.log('maptoestemming en een werkelijk volle opslag.');
-process.exit(fout ? 1 : 0);
+eindregel();
 }
