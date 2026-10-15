@@ -56,7 +56,7 @@ const ok = (naam, voorwaarde, extra='') => {
 };
 let groepen = 0;
 const kop = t => { groepen++; console.log('\n' + t); };
-const GROEPEN_VERWACHT = 20;
+const GROEPEN_VERWACHT = 21;
 
 /* De eindregel op een plek, zodat hij ook verschijnt als de bundel onderweg
    omvalt. Anders eindigt een mislukte run met alleen een stacktrace, en dat
@@ -93,6 +93,10 @@ function omgevallen(waar, e){
 }
 process.on('unhandledRejection', (e) => omgevallen('een afgewezen belofte is niet opgevangen', e));
 process.on('uncaughtException', (e) => omgevallen('een uitzondering is niet opgevangen', e));
+/* Een belofte die nooit uitkomt, laat node zonder werk achter: dan sluit het stil af,
+   zonder eindregel en met code 0, en leest een halve run als 'niets mislukt'. Dat
+   gebeurde hier met een test die op een nagebootste klok wachtte die niet liep. */
+process.on('beforeExit', () => { if (!afgerond) omgevallen('de bundel stopte halverwege', 'een belofte kwam nooit uit'); });
 const bijna = (a, b, marge=1e-9) => Math.abs(a - b) < marge;
 
 /* Nagebootste serviceworker-omgeving met de echte semantiek van de Cache API:
@@ -101,6 +105,15 @@ const bijna = (a, b, marge=1e-9) => Math.abs(a - b) < marge;
    een ok-vlag. Zonder die drie dingen toetsen de tests iets anders dan de browser doet. */
 const ORIGIN = 'https://mv-systems-apps.github.io';
 const SCOPE = ORIGIN + '/';
+/* De naam van de eigen cache. Sinds de drie apps gelijk zijn getrokken een losse
+   teller met de naam ervan afgeleid; de oude schrijfwijze ('trends-v28') wordt
+   hier nog herkend, zodat de bundel ook tegen de vorige versie te draaien is. */
+const CACHE_NAAM = (() => {
+  const oud = SW.match(/CACHE_VERSION = '([^']+)'/);
+  if (oud) return oud[1];
+  const teller = SW.match(/const CACHE_VERSION = (\d+);/);
+  return 'trends-v' + (teller ? teller[1] : '?');
+})();
 function swOmgeving(opties = {}) {
   const abs = u => new URL(u, SCOPE).href;
   const zonderQuery = u => String(u).split('?')[0];
@@ -139,14 +152,22 @@ function swOmgeving(opties = {}) {
   const log = [];
   let online = opties.online !== false;
   let hangt = false;
+  let traag = opties.traag || 0;
   const netwerk = (req, init) => {
     const url = abs(req && req.url ? req.url : req);
-    log.push({url, cache: init && init.cache});
+    log.push({url, cache: (init && init.cache) || (req && req.cache)});
     // Een verbinding die blijft hangen: geen antwoord én geen fout, nooit.
     if (hangt) return new Promise(() => {});
+    /* Een trage maar werkende verbinding: het antwoord komt, maar pas na
+       opties.traag ms op de nagebootste klok. */
+    if (traag && online && server.has(zonderQuery(url))) {
+      return new Promise(r => nepSetTimeout(() => r({ok: true, status: 200, type: 'basic',
+        body: 'traag ' + url, clone(){ return this; }}), traag));
+    }
     if (!online) return Promise.reject(new Error('offline'));
     if (new URL(url).origin !== ORIGIN) return Promise.resolve({ok: true, status: 200, type: 'cors', clone(){ return this; }});
-    if (!server.has(url)) return Promise.resolve({ok: false, status: 404, type: 'basic', clone(){ return this; }});
+    /* Een statische server bedient op pad en trekt zich van de query niets aan. */
+    if (!server.has(zonderQuery(url))) return Promise.resolve({ok: false, status: 404, type: 'basic', clone(){ return this; }});
     return Promise.resolve({ok: true, status: 200, type: 'basic', body: 'inhoud ' + url, clone(){ return this; }});
   };
   /* Nagebootste klok, zodat een test op de uiterste wachttijd niet echt tien
@@ -160,13 +181,18 @@ function swOmgeving(opties = {}) {
     location: {origin: ORIGIN, href: SCOPE},
     addEventListener: (t, f) => { (handlers[t] ||= []).push(f); },
     skipWaiting(){ self.skipWaitingAangeroepen = true; },
-    clients: {claim(){}}
+    /* De worker schrijft de open vensters aan zodra er een verse kopie van de
+       pagina staat; hier worden die berichten opgevangen. */
+    clients: {claim(){}, matchAll(){ return Promise.resolve(vensters); }},
+    berichten: []
   };
+  const vensters = [{postMessage: m => self.berichten.push(m)}];
   return {
     ORIGIN, SCOPE, abs, store, caches, handlers, self, log,
     zetOffline(){ online = false; },
     zetOnline(){ online = true; },
     zetHangend(){ hangt = true; },
+    zetTraag(ms){ traag = ms; },
     lopendeKlokken(){ return klokken.size; },
     async tik(ms){
       /* Eerst de microtaken laten uitlopen: de klok van metGrens wordt pas gezet
@@ -476,7 +502,7 @@ kop('9. Cache-isolatie, offline en externe verzoeken (sw-trends.js)');
   store.set('events-v2', new Map([[ORIGIN + '/events/events.html', 'events']]));
   store.set('trends-v1', new Map([[ORIGIN + '/trends.html', 'heel oud']]));
   maakSw();
-  const huidige = SW.match(/CACHE_VERSION = '([^']+)'/)[1];
+  const huidige = CACHE_NAAM;
 
   (async () => {
     let p; handlers.install[0]({waitUntil: x => p = x}); await p;
@@ -1115,7 +1141,7 @@ kop('18. Offline navigeren met een query-string');
 {
   const env = swOmgeving();
   env.maakSw();
-  const huidige = SW.match(/CACHE_VERSION = '([^']+)'/)[1];
+  const huidige = CACHE_NAAM;
 
   (async () => {
     // eerst online installeren, dan de verbinding wegnemen
@@ -1137,19 +1163,19 @@ kop('18. Offline navigeren met een query-string');
     ok('ook de map-URL met query werkt', !!(await vraag(ORIGIN + '/?x=1', 'navigate')));
     ok('geen extra kopie per query-variant in de cache', inhoud.size === aantalNaPrecache, inhoud.size + ' sleutels');
 
-    /* Een gewoon bestand mag de query juist niet negeren: ?v=2 hoort opnieuw te worden
-       gehaald. Offline levert dat geen oude kopie en ook geen undefined meer, maar een
-       net 503-antwoord. */
+    /* Eén kopie per pad, voor elk eigen bestand: zo doen de drie apps het sinds ze
+       gelijk zijn getrokken. Wie echt een verse versie wil, vraagt dat met cache
+       'reload' of 'no-store' (groep 21). */
     {
       const res = await vraag(ORIGIN + '/icon.svg?v=2', 'no-cors');
-      ok('bestand met andere query valt niet terug op de oude kopie', !!res && res.status === 503, res && res.status);
+      ok('ook een bestand met query komt offline uit de cache', !!res && res.status === 200, res && res.status);
     }
     ok('bestand zonder query komt wel uit de cache', !!(await vraag(ORIGIN + '/icon.svg', 'no-cors')));
 
     // en de bestaande afspraken blijven staan
     ok('ander domein blijft buiten de cache', (await vraag('https://cdn.example.com/x.js', 'no-cors')) === undefined);
     ok('niet-GET gaat de serviceworker voorbij', (await vraag(ORIGIN + '/trends.html', 'navigate', 'POST')) === undefined);
-    ok('alleen navigaties negeren de query', /isNavigatie \? \{ ignoreSearch: true \}/.test(SW));
+    ok('opzoeken gebeurt onder het pad zonder query', /const bewaarSleutel = sleutel\(url\);/.test(SW));
 
     await deel19();
   })();
@@ -1160,7 +1186,7 @@ kop('18. Offline navigeren met een query-string');
 async function deel19(){
 kop('19. Betrouwbare installatie en offline-terugval');
 
-const huidige = SW.match(/CACHE_VERSION = '([^']+)'/)[1];
+const huidige = CACHE_NAAM;
 const installeer = async (env) => {
   env.maakSw();
   let p; env.handlers.install[0]({waitUntil: x => p = x});
@@ -1452,6 +1478,96 @@ kop('20. Vastgezette opslag');
     ok('en onderscheidt ja, nee en onbekend',
        (t.match(/opslagVast === (true|false)/g) || []).length === 2 &&
        /'ja'/.test(t) && /'nee'/.test(t) && /'onbekend'/.test(t));
+  }
+}
+
+/* ---------- 21. gelijk met Golf Score en Events ---------- */
+kop('21. De worker doet hetzelfde als die van Golf Score en Events');
+{
+  const vraagMet = (env) => async (url, mode, cache) => {
+    let antwoord = null;
+    env.handlers.fetch[0]({request: {method: 'GET', url, mode, cache}, respondWith: x => antwoord = x, waitUntil(){}});
+    return antwoord ? await antwoord : undefined;
+  };
+
+  /* Stap 8: de cachenaam is een losse teller, met de naam ervan afgeleid. */
+  ok('CACHE_VERSION is een getal', /const CACHE_VERSION = \d+;/.test(SW));
+  ok('en de naam wordt ervan afgeleid', /const CACHE_NAME = 'trends-v' \+ CACHE_VERSION;/.test(SW));
+  ok('update_cache_version.py kent die schrijfwijze',
+     /const CACHE_VERSION = \(\\d\+\);/.test(fs.readFileSync(path.join(__dirname, 'update_cache_version.py'), 'utf8')));
+
+  /* Stap 2: de achtergrondverversing mag 60 s duren. Met 10 s werd op een trage
+     verbinding de nieuwe versie telkens afgekapt en bleef de melding uit. */
+  {
+    const ga = SW.match(/const GRENS_ACHTERGROND = (\d+);/);
+    ok('de worker kent een ruime grens voor de achtergrondverversing', !!ga && +ga[1] === 60000, ga && ga[1] + ' ms');
+    const env = swOmgeving();
+    await installeer(env);
+    env.zetTraag(11000);
+    const voor = env.store.get(huidige).get(env.abs('./trends.html'));
+    const res = await vraagMet(env)(env.ORIGIN + '/trends.html', 'navigate');
+    ok('een cachetreffer komt meteen', !!res && res.status === 200, res && res.status);
+    await env.tik(11001);
+    const na = env.store.get(huidige).get(env.abs('./trends.html'));
+    ok('een verversing van 11 s komt nog in de cache', !!na && na !== voor && na.body === 'traag ' + env.abs('./trends.html'),
+       na === voor ? 'ongewijzigd' : (na && na.body));
+  }
+
+  /* Stap 4: de worker meldt een verse kopie van de pagina, zodat de app meteen
+     controleert en niet pas bij het volgende wegschakelen. */
+  {
+    const env = swOmgeving();
+    await installeer(env);
+    await vraagMet(env)(env.ORIGIN + '/trends.html', 'navigate');
+    await env.tik(0);
+    ok('na een verse kopie van de pagina volgt een bericht',
+       env.self.berichten.some(m => m && m.type === 'kopieVernieuwd'), JSON.stringify(env.self.berichten));
+    env.self.berichten.length = 0;
+    await vraagMet(env)(env.ORIGIN + '/icon.svg', 'no-cors');
+    await env.tik(0);
+    ok('bij een bijbestand niet: daar staat geen stempel in', env.self.berichten.length === 0,
+       JSON.stringify(env.self.berichten));
+    ok('de app luistert naar dat bericht',
+       /navigator\.serviceWorker\.addEventListener\('message', \(e\)=>\{\s*\n\s*if\(e\.data && e\.data\.type === 'kopieVernieuwd'\) checkAppUpdate\(\);/.test(SCRIPT));
+    ok('en houdt de controle na 4 s als vangnet', /setTimeout\(checkAppUpdate, 4000\);/.test(SCRIPT));
+  }
+
+  /* Stap 6: een ontbrekend bijbestand overnemen uit de nieuwste vorige eigen cache,
+     op nummer (trends-v10 is nieuwer dan trends-v9), nooit uit die van een buurapp. */
+  {
+    const env = swOmgeving({server: ['./', './index.html', './trends.html']});
+    env.store.set('trends-v9', new Map([[env.abs('./icon.svg'), {body: 'icoon v9'}]]));
+    env.store.set('trends-v10', new Map([[env.abs('./icon.svg'), {body: 'icoon v10'}]]));
+    env.store.set('golf-score-v41', new Map([[env.abs('./manifest.json'), {body: 'van golf'}]]));
+    const fail = await installeer(env);
+    ok('de installatie slaagt', fail === null, fail && fail.message);
+    const c = env.store.get(huidige) || new Map();
+    const icoon = c.get(env.abs('./icon.svg'));
+    ok('het ontbrekende icoon komt uit de nieuwste vorige eigen cache', !!icoon && icoon.body === 'icoon v10',
+       icoon ? icoon.body : 'ontbreekt');
+    ok('en niets uit de cache van een buurapp', !c.has(env.abs('./manifest.json')));
+  }
+
+  /* Stap 7: een verzoek dat uitdrukkelijk vers wil, gaat langs de cache en wordt
+     niet bewaard; en elk pad heeft één kopie, ook met een query. */
+  {
+    const env = swOmgeving();
+    await installeer(env);
+    const vraag = vraagMet(env);
+    const voor = env.store.get(huidige).get(env.abs('./manifest.json'));
+    const vers = await vraag(env.ORIGIN + '/manifest.json', 'cors', 'no-store');
+    await env.tik(0);
+    ok('no-store krijgt een antwoord van het netwerk', !!vers && vers.status === 200, vers && vers.status);
+    ok('en wordt niet bewaard', env.store.get(huidige).get(env.abs('./manifest.json')) === voor);
+    await vraag(env.ORIGIN + '/icon.svg?v=2', 'no-cors');
+    await env.tik(0);
+    ok('een query levert geen tweede kopie op', [...env.store.get(huidige).keys()].every(k => k.indexOf('?') < 0),
+       [...env.store.get(huidige).keys()].filter(k => k.indexOf('?') >= 0).join());
+    env.zetOffline();
+    const ns = await vraag(env.ORIGIN + '/manifest.json', 'cors', 'no-store');
+    ok('offline geeft no-store een fout en niet de oude kopie', !!ns && ns.status === 503, ns && ns.status);
+    const rl = await vraag(env.ORIGIN + '/manifest.json', 'cors', 'reload');
+    ok('reload ook', !!rl && rl.status === 503, rl && rl.status);
   }
 }
 

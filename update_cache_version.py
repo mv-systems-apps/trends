@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 SW_PATH = Path(__file__).parent / "sw-trends.js"
-VERSION_RE = re.compile(r"const CACHE_VERSION = 'trends-v(\d+)';")
+VERSION_RE = re.compile(r"const CACHE_VERSION = (\d+);")
 
 
 def main():
@@ -44,7 +44,7 @@ def main():
 
     old_version = int(match.group(1))
     new_version = old_version + 1
-    new_text = VERSION_RE.sub(f"const CACHE_VERSION = 'trends-v{new_version}';", text, count=1)
+    new_text = VERSION_RE.sub(f"const CACHE_VERSION = {new_version};", text, count=1)
 
     SW_PATH.write_text(new_text, encoding="utf-8")
     print(f"Cache-versie bijgewerkt: trends-v{old_version} -> trends-v{new_version}")
