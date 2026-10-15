@@ -338,7 +338,7 @@
       <div class="empty" id="source-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
       <div class="source-list" id="source-list" style="max-height:60vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;"></div>
       <div class="empty" id="source-empty" style="display:none;">Nog geen bronnen. Koppel eerst een metadatabestand hierboven.</div>
-      <div id="app-version-stamp">Versie 1352897-001</div>
+      <div id="app-version-stamp">Versie 1352897-002</div>
       <div id="opslag-vast"></div>
     </div>
 
@@ -1492,11 +1492,11 @@ function zetOpslagVast(opslag){
 function toonOpslagVast(){
   const el = document.getElementById('opslag-vast');
   if(!el) return;
-  el.textContent = opslagVast === true
-    ? 'Opslag vastgezet — de browser mag deze opslag niet wissen'
-    : opslagVast === false
-      ? 'Opslag niet vastgezet — gevraagd, niet toegekend'
-      : 'Opslag niet vastgezet — de vraag is niet gelukt of wordt niet ondersteund';
+  /* Kort. "onbekend" en niet "nee" als de vraag niet lukte of de browser het
+     niet kent: het kan dan nog steeds vaststaan, we weten het alleen niet. */
+  el.textContent = 'Opslag vastgezet: ' + (opslagVast === true ? 'ja'
+                                         : opslagVast === false ? 'nee'
+                                         : 'onbekend');
   el.classList.toggle('niet-vast', opslagVast !== true);
 }
 

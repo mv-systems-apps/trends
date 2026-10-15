@@ -1443,9 +1443,16 @@ kop('20. Vastgezette opslag');
     ok('een meegegeven opslag verandert de toestand van de app niet',
        app.eigenToestand() === null, String(app.eigenToestand()));
   }
-  ok('de melding onderscheidt vastgezet, geweigerd en mislukt',
-     (haal('toonOpslagVast').match(/opslagVast === (true|false)/g) || []).length === 2 &&
-     /niet vastgezet/.test(haal('toonOpslagVast')));
+  /* Drie uitkomsten, drie woorden. "onbekend" en niet "nee" als de vraag niet
+     lukte: het kan dan nog steeds vaststaan, we weten het alleen niet -- en
+     "nee" zou je op zoek sturen naar een probleem dat er misschien niet is. */
+  {
+    const t = haal('toonOpslagVast');
+    ok('de melding is kort', /'Opslag vastgezet: '/.test(t));
+    ok('en onderscheidt ja, nee en onbekend',
+       (t.match(/opslagVast === (true|false)/g) || []).length === 2 &&
+       /'ja'/.test(t) && /'nee'/.test(t) && /'onbekend'/.test(t));
+  }
 }
 
 eindregel();
