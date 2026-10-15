@@ -56,7 +56,7 @@ const ok = (naam, voorwaarde, extra='') => {
 };
 let groepen = 0;
 const kop = t => { groepen++; console.log('\n' + t); };
-const GROEPEN_VERWACHT = 19;
+const GROEPEN_VERWACHT = 20;
 
 /* De eindregel op een plek, zodat hij ook verschijnt als de bundel onderweg
    omvalt. Anders eindigt een mislukte run met alleen een stacktrace, en dat
@@ -1382,6 +1382,70 @@ const vraagVan = (env) => async (url, mode, method = 'GET') => {
   env2.store.get(huidige).clear();
   const res = await vraagVan(env2)(env2.ORIGIN + '/trends.html', 'navigate');
   ok('online met lege cache levert gewoon het netwerkantwoord', !!res && res.status === 200);
+}
+
+/* ---------- 20. vastgezette opslag ---------- */
+kop('20. Vastgezette opslag');
+{
+  /* Zonder vastgezette opslag mag de browser de opslag van de app wissen bij
+     ruimtegebrek. Daarin zit de verwijzing naar de werkmap: raakt die weg, dan
+     is niet alleen de toestemming verlopen maar weet de app niet meer WELKE map
+     het was. Golf-score en events vragen het allebei; trends deed dat niet. */
+  ok('trends vraagt de browser om vastgezette opslag',
+     /navigator\.storage/.test(SCRIPT) && /\.persist\(\)/.test(SCRIPT) && /\.persisted\(\)/.test(SCRIPT));
+  ok('en laat in het scherm zien wat eruit kwam',
+     /<div id="opslag-vast">/.test(HTML) && /getElementById\('opslag-vast'\)/.test(SCRIPT));
+
+  /* Een afgewezen belofte mag hier geen uitzondering worden: dan stopt de
+     bundel en lees je niet meer WELK geval misging. */
+  const uitkomst = async (p) => { try { return await p; } catch (e) { return 'uitzondering: ' + e.message; } };
+  const bouw = () => {
+    const ctx = { persistAanroepen: 0 };
+    return new Function('ctx', 'navigator', [
+      'let opslagVast = null;',
+      haal('zetOpslagVast'),
+      'return { zetOpslagVast, eigenToestand: () => opslagVast };'
+    ].join('\n'))(ctx, { storage: null });
+  };
+  const opslag = (opzet) => ({
+    persisted: async () => {
+      if (opzet.queryWerpt) throw new Error('niet toegestaan');
+      return opzet.al === true;
+    },
+    persist: async () => { opzet.aanroepen = (opzet.aanroepen || 0) + 1; return opzet.geeft !== false; }
+  });
+
+  {
+    /* Staat het al vast, dan mag er NIET opnieuw gevraagd worden: sommige
+       browsers tonen er een venstertje bij, en dat hoort niet bij elke start
+       te komen. */
+    const o = { al: true };
+    ok('staat het al vast, dan is het goed', (await uitkomst(bouw().zetOpslagVast(opslag(o)))) === true);
+    ok('en wordt er niet opnieuw gevraagd', (o.aanroepen || 0) === 0, (o.aanroepen || 0) + ' keer');
+  }
+  {
+    const o = { al: false, geeft: true };
+    ok('staat het nog niet vast, dan wordt het gevraagd',
+       (await uitkomst(bouw().zetOpslagVast(opslag(o)))) === true);
+    ok('en precies een keer', o.aanroepen === 1, o.aanroepen + ' keer');
+  }
+  ok('een weigering levert false, geen uitzondering',
+     (await uitkomst(bouw().zetOpslagVast(opslag({ al: false, geeft: false })))) === false);
+  ok('een stukke opslag levert null, geen uitzondering',
+     (await uitkomst(bouw().zetOpslagVast(opslag({ queryWerpt: true })))) === null);
+  ok('een browser zonder deze mogelijkheid levert null',
+     (await uitkomst(bouw().zetOpslagVast({}))) === null);
+  {
+    /* De meegegeven opslag is er om na te rekenen; die hoort de toestand van de
+       app niet te veranderen, anders toetst de test zijn eigen bijwerking. */
+    const app = bouw();
+    await uitkomst(app.zetOpslagVast(opslag({ al: true })));
+    ok('een meegegeven opslag verandert de toestand van de app niet',
+       app.eigenToestand() === null, String(app.eigenToestand()));
+  }
+  ok('de melding onderscheidt vastgezet, geweigerd en mislukt',
+     (haal('toonOpslagVast').match(/opslagVast === (true|false)/g) || []).length === 2 &&
+     /niet vastgezet/.test(haal('toonOpslagVast')));
 }
 
 eindregel();
