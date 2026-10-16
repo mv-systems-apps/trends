@@ -338,7 +338,7 @@
       <div class="empty" id="source-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
       <div class="source-list" id="source-list" style="max-height:60vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;"></div>
       <div class="empty" id="source-empty" style="display:none;">Nog geen bronnen. Koppel eerst een metadatabestand hierboven.</div>
-      <div id="app-version-stamp">Versie 1352898-003</div>
+      <div id="app-version-stamp">Versie 1352898-004</div>
       <div id="opslag-vast"></div>
     </div>
 
@@ -831,9 +831,9 @@ async function readJsonFromDir(name){
     bewaarKopieVan(name, text, stempel);
     return text.trim() ? JSON.parse(text) : {};
   }catch(e){
-    /* Expliciet vastleggen dát het bestand er niet was, in plaats van de stempel te wissen.
-       Zonder dit sloeg de conflictcontrole de eerste schrijfactie over en werd een bestand
-       dat buiten Trends was aangemaakt zonder waarschuwing overschreven. */
+    /* Expliciet vastleggen dát het bestand er niet is, in plaats van de stempel te wissen:
+       anders slaat de conflictcontrole de eerste schrijfactie over, en overschrijft Trends
+       zonder waarschuwing een bestand dat intussen buiten Trends is aangemaakt. */
     if(e.name === 'NotFoundError'){ __bestandStempel.set(name, null); bewaarKopieVan(name, '', null); return null; }
     throw e;
   }
@@ -1458,7 +1458,7 @@ function setFileLinkUI(prefix, state, opts){
   if(state==='linked' || state==='error'){
     document.getElementById(prefix+'-status-dot').className = 'status-dot' + (state==='error' ? ' error' : ' linked');
     document.getElementById(prefix+'-file-name').textContent = opts.name || '';
-    /* en het moment van de kopie erachter, anders verdween dat bij elke koppeling */
+    /* en het moment van de kopie erachter, anders verdwijnt dat bij elke koppeling */
     if(prefix === 'dir') toonKopieStand();
   }
 }
@@ -2209,13 +2209,10 @@ document.addEventListener('keydown', (e)=>{
     e.preventDefault(); eerste.focus();
   }
 });
-/* De drie vraag- en meldingsvensters blijven buiten modalStack en buiten de geschiedenis.
-   Ze regelen hun eigen focus, Escape slaat ze al over via wachtOpAntwoord, en de Tab-val
-   kijkt naar de DOM en niet naar de stapel. Zaten ze er wél in — zoals eerder, terwijl het
-   commentaar het tegendeel beweerde — dan raakte de geschiedenis uit de pas: koos je
-   Annuleren bij de vraag "er zijn niet-opgeslagen wijzigingen", dan stond de modal nog open
-   terwijl de regel ervoor al verdwenen was, en verliet de volgende Terug de app zonder
-   waarschuwing en met je wijzigingen. */
+/* De drie vraag- en meldingsvensters blijven buiten modalStack en de geschiedenis: ze
+   regelen zelf hun focus, Escape slaat ze over via wachtOpAntwoord, en de Tab-val kijkt
+   naar de DOM. Staan ze er wel in, dan raakt de geschiedenis uit de pas en verlaat Terug
+   de app zonder te waarschuwen voor niet-opgeslagen wijzigingen. */
 const focusVoorVraag = [];
 function opentVraag(){
   const actief = document.activeElement;
@@ -2454,8 +2451,8 @@ document.getElementById('data-source-select').addEventListener('change', async (
   const newId = document.getElementById('data-source-select').value;
   idbSet('lastBron', newId).catch(()=>{});
   const newSrc = getSource(newId);
-  /* Wat bij de vorige bron was uitgeklapt hoort niet mee te verhuizen: zonder dit stond
-     een eerder opengeklapte dag of een hiaat na wisselen en terugwisselen weer open. */
+  /* Wat bij de vorige bron is uitgeklapt hoort niet mee te verhuizen: anders staat na
+     wisselen en terugwisselen een eerder opengeklapte dag of een hiaat weer open. */
   expandedMultiDays.clear();
   expandedGapRuns.clear();
   dataPeriodFilter = newSrc?.standaard_bereik || '1m';
@@ -3255,7 +3252,7 @@ async function renderDataView(keepSelection){
   }
   /* Zit de geselecteerde rij niet meer in de weergave — bijvoorbeeld omdat ze in een
      samengevouwen hiaat is verdwenen, of buiten de periode valt — dan de selectie wissen.
-     Anders bleef de bewerkknop actief voor een rij die niet in beeld staat. */
+     Anders blijft de bewerkknop actief voor een rij die niet in beeld staat. */
   if(selectedDataKey && !rowsHtml.some(h => h.includes(`data-k="${selectedDataKey}"`))){
     selectedDataKey = null;
     selectedIsSubRow = false;
@@ -3675,10 +3672,10 @@ function fillAggregationGaps(aggPoints, mode, cutoff, rangeEnd){
   const filled = [];
   let cursor = groupFn(cutoff);
   const todayCap = todayUTCDate();
-  /* De lus liep tot de huidige periode, maar aggregatePoints houdt een groep die ná
-     vandaag begint wél. Die viel er dan tussenuit: de rij verdween uit de tabel terwijl
-     de dagweergave hem toonde, en het tabelgemiddelde ging afwijken van dat in de kaart.
-     Daarom doorlopen tot de laatste groep die er werkelijk is. */
+  /* Doorlopen tot de laatste groep die er werkelijk is, niet tot de huidige periode:
+     aggregatePoints houdt ook een groep die ná vandaag begint. Zonder die groep ontbreekt
+     de rij in de tabel terwijl de dagweergave hem toont, en wijkt het tabelgemiddelde af
+     van dat in de kaart. */
   const laatstePunt = aggPoints.length ? aggPoints[aggPoints.length-1].date : null;
   const tot = rangeEnd > todayCap ? todayCap : rangeEnd;
   const lastStart = groupFn(laatstePunt && laatstePunt > tot ? laatstePunt : tot);
@@ -3794,8 +3791,7 @@ async function renderDataChartPreview(){
 
   const rawTotalCount = Object.keys(dataCache[id] || {}).length;
   /* Het totaal in het bestand, ongewijzigd. De aftrek voor de spreidingsreeks hoort bij
-     het getoonde aantal (shownCount, verderop) en niet bij dit totaal: bij 500 metingen en
-     een maandvenster stond er anders "(499)". */
+     het getoonde aantal (shownCount, verderop), niet bij dit totaal. */
   const totalCount = rawTotalCount;
   const allKeysForBounds = Object.keys(dataCache[id] || {}).sort().reverse();
   const periodBounds = getDataPeriodBounds(allKeysForBounds);
@@ -4619,10 +4615,9 @@ function currentVersionStamp(){
   return m ? m[1] : null;
 }
 
-/* Het stempel staat op ongeveer 1% van het bestand, maar er werd 224 kB gedecodeerd om het
-   te vinden — en dat bij elke keer dat de app naar de voorgrond komt, tot de eerste melding.
-   Daarom de stroom lezen en stoppen zodra het gevonden is. Zonder streams of TextDecoder
-   valt het terug op de oude weg. */
+/* Het stempel staat vooraan in het bestand: de stroom lezen en stoppen zodra het gevonden
+   is, in plaats van bij elke keer naar de voorgrond het hele bestand te decoderen. Zonder
+   streams of TextDecoder de gewone weg. */
 async function stempelUitResponse(resp){
   if(!resp.body || typeof resp.body.getReader !== 'function' || typeof TextDecoder === 'undefined'){
     const m = (await resp.text()).match(VERSION_RE);
@@ -4749,7 +4744,7 @@ function vraagSwUpdate(){
 }
 
 /* De worker meldt het zodra er een verse kopie van de pagina in de cache staat. Op een
-   trage verbinding is die verversing na 4 s nog onderweg, en zonder dit bericht kwam de
+   trage verbinding is die verversing na 4 s nog onderweg, en zonder dit bericht komt de
    melding pas bij het wegschakelen en terughalen. De controle na 4 s blijft als vangnet,
    voor een worker van een vorige versie die dit bericht nog niet kent. */
 if('serviceWorker' in navigator){
@@ -4763,9 +4758,9 @@ document.addEventListener('visibilitychange', ()=>{
   vraagSwUpdate();
   checkAppUpdate();
 });
-/* Een tabblad dat dagen op de voorgrond blijft wisselt nooit van zichtbaarheid en werd dus
-   nooit gecontroleerd — precies het scenario dat hierboven als aanleiding staat. De
-   afknijping in vraagSwUpdate blijft gelden, dus dit kost geen extra netwerkverkeer. */
+/* Een tabblad dat dagen op de voorgrond blijft wisselt nooit van zichtbaarheid en zou
+   dus nooit worden gecontroleerd. De afknijping in vraagSwUpdate blijft gelden, dus dit
+   kost geen extra netwerkverkeer. */
 setInterval(()=>{
   if(document.hidden) return;
   vraagSwUpdate();
