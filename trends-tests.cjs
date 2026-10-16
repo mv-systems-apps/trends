@@ -56,7 +56,7 @@ const ok = (naam, voorwaarde, extra='') => {
 };
 let groepen = 0;
 const kop = t => { groepen++; console.log('\n' + t); };
-const GROEPEN_VERWACHT = 21;
+const GROEPEN_VERWACHT = 22;
 
 /* De eindregel op een plek, zodat hij ook verschijnt als de bundel onderweg
    omvalt. Anders eindigt een mislukte run met alleen een stacktrace, en dat
@@ -468,6 +468,10 @@ kop('8. Externe bestandswijziging');
     'async function showConfirm(m){ env.vragen.push(m); return env.antwoord; }',
     'async function writeHandleJson(h,o){ const w=await h.createWritable(); await w.write(JSON.stringify(o)); await w.close(); }',
     'const __bestandStempel = new Map();',
+    /* sinds 1352897-004: de leeskopie. Hier gekoppeld en met toegang, zoals deze
+       groep altijd heeft getest; groep 22 test de stand zonder toegang. */
+    'let leesKopieModus = false; const KOPIE_ONBEKEND = {onbekend: true};',
+    'async function bewaarKopieVan(){} async function zorgVoorToegang(){ return true; }',
     haal('leesStempel'), haal('readJsonFromDir'), haal('writeJsonToDir'),
     'return { readJsonFromDir, writeJsonToDir };'
   ].join('\n'))(env, dirHandle);
@@ -778,8 +782,9 @@ const KAPOT = '{"D20261001T1200": 80,';
 {
   ok('beschadigd bestand krijgt een eigen naam naast de back-up',
      /_beschadigd/.test(SCRIPT) && /herstelUitBackup/.test(SCRIPT));
+  /* zonder toegang (leeskopie) kan er niets uit de back-up worden teruggezet */
   ok('beschadigd bestand wordt bij inlezen aangeboden',
-     /if\(await herstelUitBackup\(id\)\) return;/.test(SCRIPT));
+     /if\(!leesKopieModus && await herstelUitBackup\(id\)\) return;/.test(SCRIPT));
 }
 
 await deel13();
@@ -1571,5 +1576,162 @@ kop('21. De worker doet hetzelfde als die van Golf Score en Events');
   }
 }
 
-eindregel();
+/* ---------- 22. lezen zonder toegang, toegang pas bij het opslaan ---------- */
+kop('22. Lezen uit de leeskopie, toegang pas bij het opslaan');
+{
+  /* Edge op Android onthoudt de toestemming voor de werkmap maar tot de app dicht
+     is, en zonder toestemming kan Trends de bestanden niet eens lezen. Tot
+     1352897-003 stond er dan 'Toegang autoriseren' en was er niets te zien. Nu
+     leest Trends uit een leeskopie in de browser en vraagt het pas bij het
+     opslaan om toegang. De stempel uit de kopie houdt een noodbewerking buiten de
+     app heel: dan volgt de bestaande vraag of er mag worden overschreven. */
+  const nodig = ['readJsonFromDir', 'writeJsonToDir', 'leesStempel', 'zorgVoorToegang', 'bewaarKopieVan'];
+  const ontbreekt = nodig.filter(n => { try { haal(n); return false; } catch (e) { return true; } });
+  ok('de functies voor de leeskopie bestaan', ontbreekt.length === 0, ontbreekt.join(', ') || 'alle');
+
+  const T0 = Date.UTC(2026, 9, 16, 12, 0);
+  const maakWerkmap = (bestanden, perm) => {
+    const map = new Map(Object.entries(bestanden).map(([k, v]) => [k, {tekst: v, mtime: T0}]));
+    const w = {
+      map, perm, gevraagd: 0, gelezen: 0,
+      async requestPermission(){ w.gevraagd++; if (w.perm === 'granted') w.toegang = true; return w.perm; },
+      toegang: false,
+      async getFileHandle(naam, opts){
+        if (!w.toegang) throw Object.assign(new Error('geen toegang'), {name: 'NotAllowedError'});
+        if (!map.has(naam) && !(opts && opts.create)) throw Object.assign(new Error('weg'), {name: 'NotFoundError'});
+        return {
+          getFile: async () => { w.gelezen++; const f = map.get(naam) || {tekst: '', mtime: T0};
+            return {text: async () => f.tekst, lastModified: f.mtime, size: f.tekst.length}; },
+          createWritable: async () => { let buf = ''; return {write: async t => { buf += t; },
+            close: async () => { map.set(naam, {tekst: buf, mtime: (map.get(naam) || {mtime: T0}).mtime + 1000}); }, abort: async () => {}}; }
+        };
+      }
+    };
+    return w;
+  };
+  const bouw = (werkmap, idb, antwoord) => {
+    const ctx = {vragen: [], idb};
+    const fn = new Function('ctx', 'dirHandle', `
+      let leesKopieModus = true;
+      const KOPIE_ONBEKEND = {onbekend: true};
+      const __bestandStempel = new Map();
+      let __pendingWrites = 0;
+      const __writeChain = new Map();
+      const idbGet = async (k) => ctx.idb.has(k) ? ctx.idb.get(k) : null;
+      const idbSet = async (k, v) => { ctx.idb.set(k, v); return true; };
+      const showConfirm = (m) => { ctx.vragen.push(m); return Promise.resolve(${antwoord ? 'true' : 'false'}); };
+      const maybeBackupFile = async () => {};
+      const toonKopieStand = () => {};
+      ${haal('writeHandleJson')}
+      ${haal('leesStempel')}
+      ${haal('bewaarKopieVan')}
+      ${haal('zorgVoorToegang')}
+      ${haal('readJsonFromDir')}
+      ${haal('writeJsonToDir')}
+      return { readJsonFromDir, writeJsonToDir, stand: () => leesKopieModus };
+    `);
+    return {ctx, ...fn(ctx, werkmap)};
+  };
+  const uitkomst = async (p) => { try { await p; return 'gelukt'; } catch (e) { return e.name || 'fout'; } };
+  const KOPIE = JSON.stringify({D20261015T0800: 80.4}, null, '\t');
+  const idbMet = (tekst, mtime) => new Map([['kopie:gewicht.json', {tekst, stempel: {lastModified: mtime, size: tekst.length}, tijd: T0}]]);
+
+  const koppelingen = () => {
+    /* de koppelingen in de app */
+    ok('zonder toegang start Trends uit de kopie als die er is',
+       /idbGet\('kopie:' \+ META_FILENAME\)/.test(haal('bootDir')) && /leesKopieModus = true/.test(haal('bootDir')));
+    ok('Vernieuwen vraagt zonder toegang eerst daarom',
+       /btn-refresh-dir'\)\.addEventListener\('click', async \(\)=>\{\s*\n\s*if\(!dirHandle\) return;\s*\n\s*if\(!\(await zorgVoorToegang\(\)\)\)/.test(SCRIPT));
+    ok('een geweigerde toegang heeft een eigen melding bij een meting',
+       /ToegangGeweigerd/.test(haal('bewaarMeting')));
+    ok('en bij de bronnenlijst', /ToegangGeweigerd/.test(haal('syncMetaFile')));
+    ok('de controle van de bronbestanden slaat de leeskopie over',
+       /if\(leesKopieModus\) return;/.test(haal('validateBronnen')));
+    ok('een bestand kiezen vraagt eerst om toegang',
+       /await zorgVoorToegang\(\)/.test(haal('openBestandPicker')));
+  };
+  if (ontbreekt.length === 0) {
+    (async () => {
+      /* lezen zonder toegang: uit de kopie, zonder de map aan te raken */
+      {
+        const w = maakWerkmap({'gewicht.json': KOPIE}, 'granted');
+        const t = bouw(w, idbMet(KOPIE, T0), true);
+        const obj = await t.readJsonFromDir('gewicht.json');
+        ok('zonder toegang komt de bron uit de leeskopie', !!obj && obj.D20261015T0800 === 80.4, JSON.stringify(obj));
+        ok('zonder de map aan te raken of om toegang te vragen', w.gelezen === 0 && w.gevraagd === 0);
+      }
+      /* opslaan: nu pas de vraag, en het bestand was niet veranderd */
+      {
+        const w = maakWerkmap({'gewicht.json': KOPIE}, 'granted');
+        const t = bouw(w, idbMet(KOPIE, T0), true);
+        await t.readJsonFromDir('gewicht.json');
+        const r = await uitkomst(t.writeJsonToDir('gewicht.json', {D20261015T0800: 80.4, D20261016T0800: 80.1}));
+        ok('opslaan vraagt om toegang', w.gevraagd === 1, w.gevraagd + ' keer');
+        ok('en schrijft dan weg', r === 'gelukt' && /D20261016T0800/.test(w.map.get('gewicht.json').tekst), r);
+        ok('zonder vraag over overschrijven: het bestand was niet veranderd', t.ctx.vragen.length === 0, t.ctx.vragen.join(' | '));
+        ok('daarna is de leeskopie-stand voorbij', t.stand() === false);
+        const k = t.ctx.idb.get('kopie:gewicht.json');
+        ok('en is de kopie gelijk aan het bestand', !!k && k.tekst === w.map.get('gewicht.json').tekst);
+        ok('met de stempel van het bestand', !!k && k.stempel && k.stempel.lastModified === w.map.get('gewicht.json').mtime);
+      }
+      /* een noodbewerking buiten de app: niet overschrijven zonder vraag */
+      {
+        const w = maakWerkmap({'gewicht.json': KOPIE}, 'granted');
+        w.map.set('gewicht.json', {tekst: JSON.stringify({D20261015T0800: 79.9}), mtime: T0 + 5000});
+        const t = bouw(w, idbMet(KOPIE, T0), false);
+        await t.readJsonFromDir('gewicht.json');
+        const r = await uitkomst(t.writeJsonToDir('gewicht.json', {D20261016T0800: 80.1}));
+        ok('na een noodbewerking volgt de vraag over overschrijven', t.ctx.vragen.length === 1, t.ctx.vragen.length + ' vragen');
+        ok('en zonder ja wordt er niets overschreven', r === 'ConflictError' && /79\.9/.test(w.map.get('gewicht.json').tekst), r);
+      }
+      /* toegang geweigerd */
+      {
+        const w = maakWerkmap({'gewicht.json': KOPIE}, 'denied');
+        const t = bouw(w, idbMet(KOPIE, T0), true);
+        await t.readJsonFromDir('gewicht.json');
+        const r = await uitkomst(t.writeJsonToDir('gewicht.json', {D20261016T0800: 80.1}));
+        ok('geweigerd: de schrijfactie mislukt met een eigen reden', r === 'ToegangGeweigerd', r);
+        ok('en het bestand is ongemoeid', w.map.get('gewicht.json').tekst === KOPIE);
+        ok('en de stand blijft de leeskopie', t.stand() === true);
+      }
+      /* een bestand zonder kopie: niet blind overschrijven */
+      {
+        const w = maakWerkmap({'gewicht.json': KOPIE}, 'granted');
+        const t = bouw(w, new Map(), false);
+        await t.readJsonFromDir('gewicht.json');
+        const r = await uitkomst(t.writeJsonToDir('gewicht.json', {D20261016T0800: 80.1}));
+        ok('zonder kopie van het bestand vraagt Trends eerst', t.ctx.vragen.length === 1 && r === 'ConflictError', r);
+      }
+      /* met toegang: lezen legt de kopie vast */
+      {
+        const w = maakWerkmap({'gewicht.json': KOPIE}, 'granted');
+        w.toegang = true;
+        const t = bouw(w, new Map(), true);
+        await t.writeJsonToDir; // bestaat
+        const fn2 = new Function('ctx', 'dirHandle', `
+          let leesKopieModus = false;
+          const KOPIE_ONBEKEND = {onbekend: true};
+          const __bestandStempel = new Map();
+          const idbGet = async (k) => ctx.idb.has(k) ? ctx.idb.get(k) : null;
+          const idbSet = async (k, v) => { ctx.idb.set(k, v); return true; };
+          const toonKopieStand = () => {};
+          ${haal('bewaarKopieVan')}
+          ${haal('zorgVoorToegang')}
+          ${haal('readJsonFromDir')}
+          return readJsonFromDir;
+        `);
+        const ctx2 = {idb: new Map()};
+        await fn2(ctx2, w)('gewicht.json');
+        const k = ctx2.idb.get('kopie:gewicht.json');
+        ok('lezen met toegang legt de kopie vast, met stempel', !!k && k.tekst === KOPIE && k.stempel && k.stempel.lastModified === T0);
+      }
+
+      koppelingen();
+      eindregel();
+    })().catch(e => omgevallen('groep 22', e));
+  } else {
+    koppelingen();
+    eindregel();
+  }
+}
 }
