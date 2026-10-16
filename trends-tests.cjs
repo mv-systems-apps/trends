@@ -1647,6 +1647,13 @@ kop('22. Lezen uit de leeskopie, toegang pas bij het opslaan');
     ok('en bij de bronnenlijst', /ToegangGeweigerd/.test(haal('syncMetaFile')));
     ok('de controle van de bronbestanden slaat de leeskopie over',
        /if\(leesKopieModus\) return;/.test(haal('validateBronnen')));
+    /* De regel in het Bronnen-paneel: mapnaam en het moment van de kopie, als
+       dd-mm-jjjj uu:mm, zonder verdere woorden. */
+    let tijdTekst = '(geen kopieTijd)';
+    try { tijdTekst = new Function(haal('kopieTijd') + '; return kopieTijd(new Date(2026, 9, 6, 9, 5).getTime());')(); } catch (e) {}
+    ok('het moment van de kopie staat er als dd-mm-jjjj uu:mm', tijdTekst === '06-10-2026 09:05', tijdTekst);
+    let paneel = ''; try { paneel = haal('toonKopieStand'); } catch (e) {}
+    ok('en de regel heeft verder alleen de mapnaam', /dirHandle\.name \+ \(wanneer \? ' · ' \+ wanneer : ''\)/.test(paneel) && !/leeskopie/.test(paneel.split('\n').filter(r => !/^\s*(\/\*|\*|\/\/)/.test(r)).join('\n')));
     ok('een bestand kiezen vraagt eerst om toegang',
        /await zorgVoorToegang\(\)/.test(haal('openBestandPicker')));
   };

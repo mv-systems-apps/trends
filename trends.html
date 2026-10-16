@@ -338,7 +338,7 @@
       <div class="empty" id="source-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
       <div class="source-list" id="source-list" style="max-height:60vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;"></div>
       <div class="empty" id="source-empty" style="display:none;">Nog geen bronnen. Koppel eerst een metadatabestand hierboven.</div>
-      <div id="app-version-stamp">Versie 1352898-001</div>
+      <div id="app-version-stamp">Versie 1352898-002</div>
       <div id="opslag-vast"></div>
     </div>
 
@@ -1606,14 +1606,20 @@ async function bootDir(){
     }
   }catch(e){ setFileLinkUI('dir', 'empty'); }
 }
-/* Het Bronnen-paneel zegt of je naar de leeskopie kijkt, en van wanneer die is. */
+/* Het moment van een kopie als dd-mm-jjjj uu:mm. */
+function kopieTijd(ms){
+  const d = new Date(ms), p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+/* Zonder toegang zegt het Bronnen-paneel van wanneer de kopie is die je ziet:
+   alleen de mapnaam en dat moment. */
 async function toonKopieStand(){
   const el = document.getElementById('dir-file-name');
   if(!el || !dirHandle) return;
   if(!leesKopieModus){ el.textContent = dirHandle.name; return; }
   const k = await idbGet('kopie:' + META_FILENAME).catch(()=>null);
-  const wanneer = k && k.tijd ? new Date(k.tijd).toLocaleString('nl-NL', {day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit'}) : null;
-  el.textContent = dirHandle.name + ' · leeskopie' + (wanneer ? ' van ' + wanneer : '');
+  const wanneer = k && k.tijd ? kopieTijd(k.tijd) : null;
+  el.textContent = dirHandle.name + (wanneer ? ' · ' + wanneer : '');
 }
 /* Met toegang: van elke bron een leeskopie maken, ook van bronnen die je deze
    sessie niet opent. Anders is er bij de volgende start zonder toegang van die
