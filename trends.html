@@ -338,7 +338,7 @@
       <div class="empty" id="source-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
       <div class="source-list" id="source-list" style="max-height:60vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;"></div>
       <div class="empty" id="source-empty" style="display:none;">Nog geen bronnen. Koppel eerst een metadatabestand hierboven.</div>
-      <div id="app-version-stamp">Versie 1352898-002</div>
+      <div id="app-version-stamp">Versie 1352898-003</div>
       <div id="opslag-vast"></div>
     </div>
 
@@ -795,8 +795,13 @@ async function leesStempel(name){
 let leesKopieModus = false;
 const KOPIE_ONBEKEND = {onbekend: true}; // stempel van een bestand zonder kopie: niet na te gaan
 async function bewaarKopieVan(name, tekst, stempel){
-  try{ await idbSet('kopie:' + name, {tekst, stempel, tijd: Date.now()}); }
-  catch(e){ /* vol of geweigerd: dan is er geen kopie, en vraagt Trends straks eerst */ }
+  const tijd = Date.now();
+  try{ await idbSet('kopie:' + name, {tekst, stempel, tijd}); }
+  catch(e){ return; /* vol of geweigerd: dan is er geen kopie, en vraagt Trends straks eerst */ }
+  /* Het moment van de laatst bijgewerkte kopie, voor het Bronnen-paneel: één
+     regel voor alle bronnen, en die verspringt bij elk lezen en opslaan. */
+  try{ await idbSet('kopieLaatst', tijd); }catch(e){}
+  toonKopieStand();
 }
 /* Vraagt om toegang als die er niet is. Moet vanuit een tik worden aangeroepen
    (opslaan, vernieuwen, een bestand kiezen): anders weigert de browser de vraag. */
@@ -1453,6 +1458,8 @@ function setFileLinkUI(prefix, state, opts){
   if(state==='linked' || state==='error'){
     document.getElementById(prefix+'-status-dot').className = 'status-dot' + (state==='error' ? ' error' : ' linked');
     document.getElementById(prefix+'-file-name').textContent = opts.name || '';
+    /* en het moment van de kopie erachter, anders verdween dat bij elke koppeling */
+    if(prefix === 'dir') toonKopieStand();
   }
 }
 
@@ -1607,18 +1614,32 @@ async function bootDir(){
   }catch(e){ setFileLinkUI('dir', 'empty'); }
 }
 /* Het moment van een kopie als dd-mm-jjjj uu:mm. */
-function kopieTijd(ms){
-  const d = new Date(ms), p = n => String(n).padStart(2, '0');
-  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+/* Het moment van een kopie: 'vandaag 17:45', 'gisteren 09:12' of
+   '14-10-2026 20:03'. nu is er voor de tests; anders de klok. Dezelfde functie
+   staat in Events. */
+function kopieTijd(ms, nu){
+  const d = new Date(ms), n = new Date(nu === undefined ? Date.now() : nu);
+  const p = x => String(x).padStart(2, '0');
+  const dag = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const tijd = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  /* via de kalenderdag, niet via 24 uur: dat gaat ook goed rond de zomertijd */
+  const gisteren = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 1).getTime();
+  if(dag(d) === dag(n)) return 'vandaag ' + tijd;
+  if(dag(d) === gisteren) return 'gisteren ' + tijd;
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${tijd}`;
 }
-/* Zonder toegang zegt het Bronnen-paneel van wanneer de kopie is die je ziet:
-   alleen de mapnaam en dat moment. */
+/* Het Bronnen-paneel zegt altijd, met en zonder toegang, van wanneer de kopie
+   is: alleen de mapnaam en dat moment. De kopie gaat mee bij elk lezen en
+   opslaan, dus dit is het laatste moment dat app en bestanden gelijk waren. */
 async function toonKopieStand(){
   const el = document.getElementById('dir-file-name');
   if(!el || !dirHandle) return;
-  if(!leesKopieModus){ el.textContent = dirHandle.name; return; }
-  const k = await idbGet('kopie:' + META_FILENAME).catch(()=>null);
-  const wanneer = k && k.tijd ? kopieTijd(k.tijd) : null;
+  let ms = await idbGet('kopieLaatst').catch(()=>null);
+  if(typeof ms !== 'number'){
+    const k = await idbGet('kopie:' + META_FILENAME).catch(()=>null);
+    ms = k && k.tijd;
+  }
+  const wanneer = ms ? kopieTijd(ms) : null;
   el.textContent = dirHandle.name + (wanneer ? ' · ' + wanneer : '');
 }
 /* Met toegang: van elke bron een leeskopie maken, ook van bronnen die je deze

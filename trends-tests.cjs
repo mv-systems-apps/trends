@@ -1653,6 +1653,25 @@ kop('22. Lezen uit de leeskopie, toegang pas bij het opslaan');
     try { tijdTekst = new Function(haal('kopieTijd') + '; return kopieTijd(new Date(2026, 9, 6, 9, 5).getTime());')(); } catch (e) {}
     ok('het moment van de kopie staat er als dd-mm-jjjj uu:mm', tijdTekst === '06-10-2026 09:05', tijdTekst);
     let paneel = ''; try { paneel = haal('toonKopieStand'); } catch (e) {}
+    const kt = (ms, nu) => { try { return new Function('ms', 'nu', haal('kopieTijd') + '; return kopieTijd(ms, nu);')(ms, nu); } catch (e) { return '(fout)'; } };
+    const NU = new Date(2026, 9, 16, 17, 51).getTime();
+    ok('vandaag', kt(new Date(2026, 9, 16, 0, 5).getTime(), NU) === 'vandaag 00:05', kt(new Date(2026, 9, 16, 0, 5).getTime(), NU));
+    ok('gisteren', kt(new Date(2026, 9, 15, 23, 59).getTime(), NU) === 'gisteren 23:59', kt(new Date(2026, 9, 15, 23, 59).getTime(), NU));
+    ok('eergisteren als datum', kt(new Date(2026, 9, 14, 20, 3).getTime(), NU) === '14-10-2026 20:03');
+    {
+      /* 25 oktober 2026 duurt in Nederland 25 uur */
+      const tzWas = process.env.TZ; process.env.TZ = 'Europe/Amsterdam';
+      const uit = kt(new Date(2026, 9, 25, 23, 30).getTime(), new Date(2026, 9, 26, 23, 50).getTime());
+      if (tzWas === undefined) delete process.env.TZ; else process.env.TZ = tzWas;
+      ok('gisteren over de wisseling naar wintertijd heen', uit === 'gisteren 23:30', uit);
+    }
+    ok('gisteren over de maandgrens', kt(new Date(2026, 8, 30, 8, 0).getTime(), new Date(2026, 9, 1, 8, 0).getTime()) === 'gisteren 08:00');
+    ok('het paneel toont het moment ook met toegang',
+       !/leesKopieModus/.test(paneel) && /idbGet\('kopieLaatst'\)/.test(paneel));
+    ok('een koppeling zet het moment er ook achter',
+       /if\(prefix === 'dir'\) toonKopieStand\(\);/.test(haal('setFileLinkUI')));
+    ok('elke nieuwe kopie zet dat moment en ververst het paneel',
+       /idbSet\('kopieLaatst', tijd\)/.test(haal('bewaarKopieVan')) && /toonKopieStand\(\);/.test(haal('bewaarKopieVan')));
     ok('en de regel heeft verder alleen de mapnaam', /dirHandle\.name \+ \(wanneer \? ' · ' \+ wanneer : ''\)/.test(paneel) && !/leeskopie/.test(paneel.split('\n').filter(r => !/^\s*(\/\*|\*|\/\/)/.test(r)).join('\n')));
     ok('een bestand kiezen vraagt eerst om toegang',
        /await zorgVoorToegang\(\)/.test(haal('openBestandPicker')));
