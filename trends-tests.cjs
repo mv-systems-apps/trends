@@ -1807,7 +1807,7 @@ kop('22. Lezen uit de leeskopie, toegang pas bij het opslaan');
           const t = maak({gelezen, opSchijf: {'trends_meta.json': S(1, 10), 'gewicht.json': S(2, 25)}});
           const uit = await t.kijk();
           ok('een bron buiten Trends gewijzigd: eerst gevraagd', t.ctx.gevraagd === 1 && /gewicht\.json is buiten Trends gewijzigd\. Opnieuw laden\?/.test(t.ctx.vraag));
-          ok('met als tweede keuze: houd wat ik zie', t.ctx.nee === 'Nee, houd wat ik zie');
+          ok('met als tweede keuze alleen: Nee', t.ctx.nee === 'Nee');
           ok('Opnieuw laden leest in', uit === true && t.ctx.herladen === 1);
           ok('en meldt dat', t.ctx.balk === 'flex' && t.ctx.oud === 'none');
         }

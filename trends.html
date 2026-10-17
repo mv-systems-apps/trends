@@ -350,7 +350,7 @@
       <div class="empty" id="source-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
       <div class="source-list" id="source-list" style="max-height:60vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;"></div>
       <div class="empty" id="source-empty" style="display:none;">Nog geen bronnen. Koppel eerst een metadatabestand hierboven.</div>
-      <div id="app-version-stamp">Versie 1352898-007</div>
+      <div id="app-version-stamp">Versie 1352898-008</div>
       <div id="opslag-vast"></div>
     </div>
 
@@ -1606,7 +1606,7 @@ async function kijkExtern(){
     for(const [naam, nu] of nieuw) externAfgewezen.set(naam, nu);
     document.getElementById('extern-oud-bar').style.display = 'flex';
     const wie = nieuw.map(([n]) => n).join(', ');
-    const ja = await showConfirm(`${wie} is buiten Trends gewijzigd. Opnieuw laden?`, 'Opnieuw laden', 'Nee, houd wat ik zie');
+    const ja = await showConfirm(`${wie} is buiten Trends gewijzigd. Opnieuw laden?`, 'Opnieuw laden', 'Nee');
     if(!ja) return false;
     await herlaadNaExtern();
     return true;
