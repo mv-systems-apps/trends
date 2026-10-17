@@ -49,6 +49,9 @@ const KERN = ['keyToDate','keyToTimeMinutes','dateToKey','geldigeSleutel','getFl
   'aggregatePoints','fmtDateNL'].map(haal).join('\n');
 eval(KERN);
 
+/* Sandboxes (new Function) zien alleen de globale scope: de opruimhaak van de
+   'buiten gewijzigd'-stand doet daar niets. */
+globalThis.externVerwerkt = () => {};
 let goed = 0, fout = 0;
 const ok = (naam, voorwaarde, extra='') => {
   if (voorwaarde) { goed++; console.log('  OK   ' + naam + (extra ? '  — ' + extra : '')); }
@@ -1762,7 +1765,7 @@ kop('22. Lezen uit de leeskopie, toegang pas bij het opslaan');
       ok('Trends heeft een controle op wijzigingen van buiten (kijkExtern)', !!kijkFn);
       if (kijkFn) {
         const maak = (o = {}) => {
-          const ctx = {herladen: 0, balk: 'none', stempels: o.opSchijf || {}};
+          const ctx = {herladen: 0, balk: 'none', oud: 'none', stempels: o.opSchijf || {}, gevraagd: 0, vraag: '', nee: ''};
           const fn = new Function('ctx', `
             let leesKopieModus = ${!!o.zonderToegang};
             let __pendingWrites = ${o.schrijft ? 1 : 0};
@@ -1779,13 +1782,19 @@ kop('22. Lezen uit de leeskopie, toegang pas bij het opslaan');
             const loadMetaFromDir = async () => { ctx.herladen++; };
             const renderDataView = async () => {};
             const setDataShowChart = async () => {};
-            const document = {getElementById: () => ({style: {set display(v){ ctx.balk = v; }}})};
+            const document = {getElementById: id => ({style: {set display(v){ if(id === 'extern-bar') ctx.balk = v; if(id === 'extern-oud-bar') ctx.oud = v; }}})};
+            const showConfirm = async (tekst, ok, nee) => { ctx.gevraagd++; ctx.vraag = tekst; ctx.nee = nee; return ctx.antwoord; };
             ${haal('stempelAnders')}
             let externBezig = false, externLaatst = 0;
+            const externAfgewezen = new Map();
+            ${haal('externVerwerkt')}
+            ${haal('herlaadNaExtern')}
             ${haal('kijkExtern')}
-            return kijkExtern;
+            return {kijkExtern, herlaadNaExtern, opnieuw: () => { externLaatst = 0; }};
           `);
-          return {ctx, kijk: fn(ctx)};
+          ctx.antwoord = o.antwoord === undefined ? true : o.antwoord;
+          const r = fn(ctx);
+          return {ctx, kijk: r.kijkExtern, herlaad: r.herlaadNaExtern, opnieuw: r.opnieuw};
         };
         const S = (t, g) => ({lastModified: t, size: g});
         const gelezen = {'trends_meta.json': S(1, 10), 'gewicht.json': S(1, 20)};
@@ -1797,13 +1806,28 @@ kop('22. Lezen uit de leeskopie, toegang pas bij het opslaan');
         {
           const t = maak({gelezen, opSchijf: {'trends_meta.json': S(1, 10), 'gewicht.json': S(2, 25)}});
           const uit = await t.kijk();
-          ok('een bron buiten Trends gewijzigd: opnieuw ingelezen', uit === true && t.ctx.herladen === 1);
-          ok('en gemeld', t.ctx.balk === 'flex');
+          ok('een bron buiten Trends gewijzigd: eerst gevraagd', t.ctx.gevraagd === 1 && /gewicht\.json is buiten Trends gewijzigd\. Opnieuw laden\?/.test(t.ctx.vraag));
+          ok('met als tweede keuze: houd wat ik zie', t.ctx.nee === 'Nee, houd wat ik zie');
+          ok('Opnieuw laden leest in', uit === true && t.ctx.herladen === 1);
+          ok('en meldt dat', t.ctx.balk === 'flex' && t.ctx.oud === 'none');
+        }
+        {
+          const t = maak({gelezen, antwoord: false, opSchijf: {'trends_meta.json': S(1, 10), 'gewicht.json': S(2, 25)}});
+          await t.kijk();
+          ok('Nee: niets ingelezen', t.ctx.herladen === 0);
+          ok('en een balk dat je de versie van ervoor ziet', t.ctx.oud === 'flex');
+          t.opnieuw(); await t.kijk();
+          ok('dezelfde wijziging: geen tweede vraag', t.ctx.gevraagd === 1);
+          t.ctx.stempels['gewicht.json'] = S(5, 30);
+          t.opnieuw(); await t.kijk();
+          ok('verandert het bestand weer, dan wel', t.ctx.gevraagd === 2);
+          await t.herlaad();
+          ok('de balk laadt opnieuw en verdwijnt dan', t.ctx.herladen === 1 && t.ctx.oud === 'none');
         }
         {
           const t = maak({gelezen, opSchijf: {'trends_meta.json': S(3, 11), 'gewicht.json': S(1, 20)}});
           await t.kijk();
-          ok('de bronnenlijst buiten Trends gewijzigd: ook opnieuw ingelezen', t.ctx.herladen === 1);
+          ok('de bronnenlijst buiten Trends gewijzigd: ook gevraagd en ingelezen', t.ctx.gevraagd === 1 && t.ctx.herladen === 1);
         }
         for (const [naam, extra] of [['zonder toegang', {zonderToegang: true}], ['tijdens een eigen schrijfactie', {schrijft: true}], ['met een venster open', {venster: true}]]) {
           const t = maak({gelezen, opSchijf: {'trends_meta.json': S(1, 10), 'gewicht.json': S(2, 25)}, ...extra});
@@ -1819,8 +1843,13 @@ kop('22. Lezen uit de leeskopie, toegang pas bij het opslaan');
           // De bronnenlijst: die blijft na het inlezen in de lijst met te controleren bestanden.
           const t = maak({gelezen, opSchijf: {'trends_meta.json': S(3, 11), 'gewicht.json': S(1, 20)}});
           await t.kijk(); await t.kijk();
-          ok('twee keer kort na elkaar: één keer inlezen (rem)', t.ctx.herladen === 1);
+          ok('twee keer kort na elkaar: één keer gevraagd (rem)', t.ctx.gevraagd === 1);
         }
+        ok('overschrijven na een wijziging van buiten maakt eerst een backup, ook als er vandaag al een is',
+           /if\(last === today && !forceer\) return;/.test(haal('maybeBackupFile')) &&
+           /await maybeBackupFile\(name, overschrijft\);/.test(haal('writeJsonToDir')));
+        ok('de annuleerknop van een vraag heet anders weer gewoon Annuleren',
+           /cancelBtn\.textContent = cancelLabel \|\| 'Annuleren';/.test(haal('showConfirm')));
         ok('de controle hangt aan terugkeren naar de app',
            /if\(document\.hidden\) return;\s*vraagSwUpdate\(\);\s*checkAppUpdate\(\);\s*kijkExtern\(\);/.test(SCRIPT) &&
            /window\.addEventListener\('focus', \(\) => \{ kijkExtern\(\); \}\);/.test(SCRIPT));

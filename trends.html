@@ -56,6 +56,12 @@
     background:rgba(79,209,197,0.12);border-top:1px solid var(--accent);
     color:var(--accent);font-family:var(--sans);font-size:16px;font-weight:600;
   }
+  #extern-oud-bar{
+    flex:0 0 auto;display:none;align-items:center;justify-content:center;gap:8px;
+    max-width:920px;width:100%;margin:0 auto;padding:10px 14px;cursor:pointer;
+    background:rgba(240,168,79,0.12);border-top:1px solid var(--warn);
+    color:var(--warn);font-family:var(--sans);font-size:16px;font-weight:600;
+  }
   #extern-bar{
     flex:0 0 auto;display:none;align-items:center;justify-content:center;gap:8px;
     max-width:920px;width:100%;margin:0 auto;padding:10px 14px;cursor:pointer;
@@ -344,7 +350,7 @@
       <div class="empty" id="source-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
       <div class="source-list" id="source-list" style="max-height:60vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;"></div>
       <div class="empty" id="source-empty" style="display:none;">Nog geen bronnen. Koppel eerst een metadatabestand hierboven.</div>
-      <div id="app-version-stamp">Versie 1352898-006</div>
+      <div id="app-version-stamp">Versie 1352898-007</div>
       <div id="opslag-vast"></div>
     </div>
 
@@ -676,6 +682,9 @@
   <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
   Nieuwe versie — tik om te herladen
 </div>
+<div id="extern-oud-bar" role="button" tabindex="0" title="Opnieuw laden">
+  Buiten Trends gewijzigd; je ziet de versie van ervoor — tik om opnieuw te laden
+</div>
 <div id="extern-bar" role="button" tabindex="0" title="Sluiten">
   Bijgewerkt met een wijziging van buiten Trends — tik om te sluiten
 </div>
@@ -836,6 +845,7 @@ async function readJsonFromDir(name){
     const file = await handle.getFile();
     const stempel = {lastModified: file.lastModified, size: file.size};
     __bestandStempel.set(name, stempel);
+    externVerwerkt(name);
     const text = await file.text();
     bewaarKopieVan(name, text, stempel);
     return text.trim() ? JSON.parse(text) : {};
@@ -859,6 +869,7 @@ async function writeJsonToDir(name, obj){
       throw Object.assign(new Error('geen toegang tot de werkmap'), {name:'ToegangGeweigerd'});
     }
     const bekend = __bestandStempel.get(name);
+    let overschrijft = false;   // de gebruiker koos ervoor een wijziging van buiten te overschrijven
     if(__bestandStempel.has(name)){
       const nu = await leesStempel(name);
       if(bekend === KOPIE_ONBEKEND){
@@ -867,20 +878,23 @@ async function writeJsonToDir(name, obj){
         if(nu){
           const ok = await showConfirm(`Trends kon niet nagaan of ${name} buiten Trends is gewijzigd (er was geen leeskopie van). Overschrijven met wat je hier ziet?`, 'Overschrijven');
           if(!ok) throw Object.assign(new Error('niet na te gaan, niet overschreven'), {name:'ConflictError'});
+          overschrijft = true;
         }
       }
       // bekend === null betekent: bij het laden bestond het bestand niet. Bestaat het nu wél,
       // dan is het buiten Trends aangemaakt en is dat net zo goed een conflict.
       else if(nu && (!bekend || nu.lastModified !== bekend.lastModified || nu.size !== bekend.size)){
-        const ok = await showConfirm(`${name} is buiten Trends gewijzigd (ander tabblad, of handmatig). Overschrijven met wat je hier ziet? Die andere wijziging gaat dan verloren.`, 'Overschrijven');
+        const ok = await showConfirm(`${name} is buiten Trends gewijzigd (ander tabblad, of handmatig). Overschrijven met wat je hier ziet? Die andere versie gaat eerst naar de backup.`, 'Overschrijven');
         if(!ok) throw Object.assign(new Error('bestand is buiten Trends gewijzigd, niet overschreven'), {name:'ConflictError'});
+        overschrijft = true;
       }
     }
-    await maybeBackupFile(name);
+    await maybeBackupFile(name, overschrijft);
     const handle = await dirHandle.getFileHandle(name, {create:true});
     await writeHandleJson(handle, obj);
     const stempel = await leesStempel(name);
     __bestandStempel.set(name, stempel); // eigen schrijfactie is geen conflict
+    externVerwerkt(name);
     // wat nu in het bestand staat, is ook de leeskopie
     bewaarKopieVan(name, JSON.stringify(obj, null, '\t'), stempel);
   });
@@ -913,12 +927,15 @@ function geldigeSleutel(k){
   return true;
 }
 const __backupGemeld = new Set(); // per bestand hoogstens één melding per mislukte-back-upreeks
-async function maybeBackupFile(name){
+/* forceer: ook als er vandaag al een backup is. Nodig bij overschrijven na een
+   wijziging van buiten: die versie staat dan alleen nog in het bestand, en de backup
+   van vandaag is ouder. Zo gaat ze niet verloren. */
+async function maybeBackupFile(name, forceer){
   const today = dateToKey(todayUTCDate());
   const idbKey = 'backup:'+name;
   let last = null;
   try{ last = await idbGet(idbKey); }catch(e){}
-  if(last === today) return;
+  if(last === today && !forceer) return;
   let gekopieerd = false;
   try{
     const existing = await dirHandle.getFileHandle(name).catch(()=>null);
@@ -1544,6 +1561,23 @@ document.getElementById('btn-refresh-dir').addEventListener('click', async ()=>{
    wordt opnieuw gekeken. Een slot en een rem van 2 s, omdat focus en zichtbaarheid
    vaak samen afgaan. */
 let externBezig = false, externLaatst = 0;
+/* Buiten Trends gewijzigd en (nog) niet ingelezen: per bestand de stempel van die
+   versie. Zolang er een staat, zie je de versie van ervoor en zegt een balk dat; de
+   vraag komt niet opnieuw voor dezelfde wijziging, wel als het bestand weer verandert. */
+const externAfgewezen = new Map();
+function externVerwerkt(naam){
+  if(!externAfgewezen.delete(naam)) return;
+  if(!externAfgewezen.size){ const b = document.getElementById('extern-oud-bar'); if(b) b.style.display = 'none'; }
+}
+async function herlaadNaExtern(){
+  await loadMetaFromDir();
+  dataCache = {};
+  await renderDataView(true);
+  if(dataShowChart) await setDataShowChart(true);
+  externAfgewezen.clear();
+  document.getElementById('extern-oud-bar').style.display = 'none';
+  document.getElementById('extern-bar').style.display = 'flex';
+}
 function stempelAnders(bekend, nu){
   if(bekend === KOPIE_ONBEKEND || bekend === undefined) return false;
   if(bekend === null) return !!nu;             // bestond niet, nu wel
@@ -1557,22 +1591,30 @@ async function kijkExtern(){
   try{
     if(await dirHandle.queryPermission({mode:'readwrite'}) !== 'granted') return false;
     const namen = [META_FILENAME, ...Object.keys(dataCache).map(id => getSource(id)?.bestand).filter(Boolean)];
-    let gewijzigd = false;
+    const nieuw = [];
     for(const naam of namen){
       if(!__bestandStempel.has(naam)) continue;
-      if(stempelAnders(__bestandStempel.get(naam), await leesStempel(naam))){ gewijzigd = true; break; }
+      const nu = await leesStempel(naam);
+      if(!stempelAnders(__bestandStempel.get(naam), nu)) continue;
+      const al = externAfgewezen.get(naam);
+      if(al && nu && al.lastModified === nu.lastModified && al.size === nu.size) continue;  // al gevraagd
+      nieuw.push([naam, nu]);
     }
-    if(!gewijzigd || __pendingWrites || modalStack.length) return false;
-    await loadMetaFromDir();
-    dataCache = {};
-    await renderDataView(true);
-    if(dataShowChart) await setDataShowChart(true);
-    document.getElementById('extern-bar').style.display = 'flex';
+    if(!nieuw.length || __pendingWrites || modalStack.length) return false;
+    /* Niet zelf inlezen maar vragen, zoals een editor: een per ongeluk gewijzigd
+       bestand komt zo niet ongemerkt in beeld. Tot je kiest, staat de balk er al. */
+    for(const [naam, nu] of nieuw) externAfgewezen.set(naam, nu);
+    document.getElementById('extern-oud-bar').style.display = 'flex';
+    const wie = nieuw.map(([n]) => n).join(', ');
+    const ja = await showConfirm(`${wie} is buiten Trends gewijzigd. Opnieuw laden?`, 'Opnieuw laden', 'Nee, houd wat ik zie');
+    if(!ja) return false;
+    await herlaadNaExtern();
     return true;
   }catch(e){ return false; }
   finally{ externBezig = false; }
 }
 document.getElementById('extern-bar').addEventListener('click', e => { e.currentTarget.style.display = 'none'; });
+document.getElementById('extern-oud-bar').addEventListener('click', () => { herlaadNaExtern().catch(()=>{}); });
 window.addEventListener('focus', () => { kijkExtern(); });
 
 document.getElementById('btn-unlink-dir').addEventListener('click', async ()=>{
@@ -2276,13 +2318,14 @@ function sluitVraag(){
   if(el && document.contains(el)){ try{ el.focus(); }catch(e){} }
 }
 
-function showConfirm(message, okLabel){
+function showConfirm(message, okLabel, cancelLabel){
   return new Promise(resolve=>{
     const overlay = document.getElementById('confirm-overlay');
     document.getElementById('confirm-text').textContent = message;
     const cancelBtn = document.getElementById('confirm-cancel');
     const okBtn = document.getElementById('confirm-ok');
     okBtn.textContent = okLabel || 'Verwijderen';
+    cancelBtn.textContent = cancelLabel || 'Annuleren';
     overlay.style.display = 'flex';
     function cleanup(result){
       overlay.style.display = 'none';
