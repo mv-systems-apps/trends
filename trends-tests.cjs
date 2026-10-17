@@ -56,7 +56,7 @@ const ok = (naam, voorwaarde, extra='') => {
 };
 let groepen = 0;
 const kop = t => { groepen++; console.log('\n' + t); };
-const GROEPEN_VERWACHT = 22;
+const GROEPEN_VERWACHT = 23;
 
 /* De eindregel op een plek, zodat hij ook verschijnt als de bundel onderweg
    omvalt. Anders eindigt een mislukte run met alleen een stacktrace, en dat
@@ -1753,6 +1753,78 @@ kop('22. Lezen uit de leeskopie, toegang pas bij het opslaan');
       }
 
       koppelingen();
+
+      /* 23. Wijzigingen van buiten, zoals Events: bij terugkeer naar de app de stempels
+         vergelijken en bij een wijziging alles opnieuw inlezen. Het gedrag, niet de tekst. */
+      kop('23. Wijziging van buiten wordt bij terugkeer ingelezen');
+      let kijkFn = null;
+      try { haal('kijkExtern'); haal('stempelAnders'); kijkFn = true; } catch (e) {}
+      ok('Trends heeft een controle op wijzigingen van buiten (kijkExtern)', !!kijkFn);
+      if (kijkFn) {
+        const maak = (o = {}) => {
+          const ctx = {herladen: 0, balk: 'none', stempels: o.opSchijf || {}};
+          const fn = new Function('ctx', `
+            let leesKopieModus = ${!!o.zonderToegang};
+            let __pendingWrites = ${o.schrijft ? 1 : 0};
+            const modalStack = ${o.venster ? "['form']" : '[]'};
+            const KOPIE_ONBEKEND = {onbekend: true};
+            const META_FILENAME = 'trends_meta.json';
+            const __bestandStempel = new Map(Object.entries(${JSON.stringify(o.gelezen || {})}));
+            let dataCache = {gewicht: {}};
+            const bronnen = [{id: 'gewicht', bestand: 'gewicht.json'}];
+            const getSource = id => bronnen.find(b => b.id === id);
+            let dataShowChart = false;
+            const dirHandle = {queryPermission: async () => ${o.zonderToegang ? "'prompt'" : "'granted'"}};
+            const leesStempel = async n => ctx.stempels[n] || null;
+            const loadMetaFromDir = async () => { ctx.herladen++; };
+            const renderDataView = async () => {};
+            const setDataShowChart = async () => {};
+            const document = {getElementById: () => ({style: {set display(v){ ctx.balk = v; }}})};
+            ${haal('stempelAnders')}
+            let externBezig = false, externLaatst = 0;
+            ${haal('kijkExtern')}
+            return kijkExtern;
+          `);
+          return {ctx, kijk: fn(ctx)};
+        };
+        const S = (t, g) => ({lastModified: t, size: g});
+        const gelezen = {'trends_meta.json': S(1, 10), 'gewicht.json': S(1, 20)};
+        {
+          const t = maak({gelezen, opSchijf: {'trends_meta.json': S(1, 10), 'gewicht.json': S(1, 20)}});
+          await t.kijk();
+          ok('ongewijzigd: niets opnieuw ingelezen', t.ctx.herladen === 0 && t.ctx.balk === 'none');
+        }
+        {
+          const t = maak({gelezen, opSchijf: {'trends_meta.json': S(1, 10), 'gewicht.json': S(2, 25)}});
+          const uit = await t.kijk();
+          ok('een bron buiten Trends gewijzigd: opnieuw ingelezen', uit === true && t.ctx.herladen === 1);
+          ok('en gemeld', t.ctx.balk === 'flex');
+        }
+        {
+          const t = maak({gelezen, opSchijf: {'trends_meta.json': S(3, 11), 'gewicht.json': S(1, 20)}});
+          await t.kijk();
+          ok('de bronnenlijst buiten Trends gewijzigd: ook opnieuw ingelezen', t.ctx.herladen === 1);
+        }
+        for (const [naam, extra] of [['zonder toegang', {zonderToegang: true}], ['tijdens een eigen schrijfactie', {schrijft: true}], ['met een venster open', {venster: true}]]) {
+          const t = maak({gelezen, opSchijf: {'trends_meta.json': S(1, 10), 'gewicht.json': S(2, 25)}, ...extra});
+          await t.kijk();
+          ok('niet opnieuw inlezen ' + naam, t.ctx.herladen === 0);
+        }
+        {
+          const t = maak({gelezen: {'trends_meta.json': S(1, 10), 'gewicht.json': S(1, 20)}, opSchijf: {'trends_meta.json': S(1, 10)}});
+          await t.kijk();
+          ok('een bestand dat even niet te lezen is geldt niet als gewijzigd', t.ctx.herladen === 0);
+        }
+        {
+          // De bronnenlijst: die blijft na het inlezen in de lijst met te controleren bestanden.
+          const t = maak({gelezen, opSchijf: {'trends_meta.json': S(3, 11), 'gewicht.json': S(1, 20)}});
+          await t.kijk(); await t.kijk();
+          ok('twee keer kort na elkaar: één keer inlezen (rem)', t.ctx.herladen === 1);
+        }
+        ok('de controle hangt aan terugkeren naar de app',
+           /if\(document\.hidden\) return;\s*vraagSwUpdate\(\);\s*checkAppUpdate\(\);\s*kijkExtern\(\);/.test(SCRIPT) &&
+           /window\.addEventListener\('focus', \(\) => \{ kijkExtern\(\); \}\);/.test(SCRIPT));
+      }
       eindregel();
     })().catch(e => omgevallen('groep 22', e));
   } else {

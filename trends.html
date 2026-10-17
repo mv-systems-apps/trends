@@ -56,6 +56,12 @@
     background:rgba(79,209,197,0.12);border-top:1px solid var(--accent);
     color:var(--accent);font-family:var(--sans);font-size:16px;font-weight:600;
   }
+  #extern-bar{
+    flex:0 0 auto;display:none;align-items:center;justify-content:center;gap:8px;
+    max-width:920px;width:100%;margin:0 auto;padding:10px 14px;cursor:pointer;
+    background:rgba(79,209,197,0.12);border-top:1px solid var(--accent);
+    color:var(--accent);font-family:var(--sans);font-size:16px;font-weight:600;
+  }
   #update-bar svg{width:18px;height:18px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
   #app-version-stamp{color:var(--muted);font-family:var(--mono);font-size:15px;text-align:center;padding:12px 0 2px;}
   #opslag-vast{color:var(--muted);font-family:var(--sans);font-size:14px;text-align:center;padding:0 0 6px;}
@@ -338,7 +344,7 @@
       <div class="empty" id="source-search-empty" style="display:none;color:var(--muted);padding:6px 0 12px;">Geen bronnen gevonden.</div>
       <div class="source-list" id="source-list" style="max-height:60vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;"></div>
       <div class="empty" id="source-empty" style="display:none;">Nog geen bronnen. Koppel eerst een metadatabestand hierboven.</div>
-      <div id="app-version-stamp">Versie 1352898-005</div>
+      <div id="app-version-stamp">Versie 1352898-006</div>
       <div id="opslag-vast"></div>
     </div>
 
@@ -669,6 +675,9 @@
 <div id="update-bar" role="button" tabindex="0" title="Nieuwe versie beschikbaar">
   <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
   Nieuwe versie — tik om te herladen
+</div>
+<div id="extern-bar" role="button" tabindex="0" title="Sluiten">
+  Bijgewerkt met een wijziging van buiten Trends — tik om te sluiten
 </div>
 
 <nav class="tabs">
@@ -1526,6 +1535,45 @@ document.getElementById('btn-refresh-dir').addEventListener('click', async ()=>{
     if(dataShowChart) await setDataShowChart(true);
   }catch(e){ setFileLinkUI('dir', 'error', {name: dirHandle.name}); }
 });
+
+/* Wijzigingen van buiten zien, zoals Events: bij elke terugkeer naar de app de stempels
+   van de gelezen bestanden vergelijken met het bestand. Is er iets buiten Trends
+   gewijzigd, dan alles opnieuw inlezen, net als Vernieuwen, en dat melden. Niet zonder
+   toegang (dan valt er niets te lezen), niet tijdens een eigen schrijfactie en niet met
+   een venster open: dan zou het inlezen over je invoer heen gaan; de volgende keer
+   wordt opnieuw gekeken. Een slot en een rem van 2 s, omdat focus en zichtbaarheid
+   vaak samen afgaan. */
+let externBezig = false, externLaatst = 0;
+function stempelAnders(bekend, nu){
+  if(bekend === KOPIE_ONBEKEND || bekend === undefined) return false;
+  if(bekend === null) return !!nu;             // bestond niet, nu wel
+  if(!nu) return false;                         // weg of onleesbaar: dat merkt het opslaan
+  return nu.lastModified !== bekend.lastModified || nu.size !== bekend.size;
+}
+async function kijkExtern(){
+  if(!dirHandle || leesKopieModus || __pendingWrites || externBezig || modalStack.length) return false;
+  if(Date.now() - externLaatst < 2000) return false;
+  externBezig = true; externLaatst = Date.now();
+  try{
+    if(await dirHandle.queryPermission({mode:'readwrite'}) !== 'granted') return false;
+    const namen = [META_FILENAME, ...Object.keys(dataCache).map(id => getSource(id)?.bestand).filter(Boolean)];
+    let gewijzigd = false;
+    for(const naam of namen){
+      if(!__bestandStempel.has(naam)) continue;
+      if(stempelAnders(__bestandStempel.get(naam), await leesStempel(naam))){ gewijzigd = true; break; }
+    }
+    if(!gewijzigd || __pendingWrites || modalStack.length) return false;
+    await loadMetaFromDir();
+    dataCache = {};
+    await renderDataView(true);
+    if(dataShowChart) await setDataShowChart(true);
+    document.getElementById('extern-bar').style.display = 'flex';
+    return true;
+  }catch(e){ return false; }
+  finally{ externBezig = false; }
+}
+document.getElementById('extern-bar').addEventListener('click', e => { e.currentTarget.style.display = 'none'; });
+window.addEventListener('focus', () => { kijkExtern(); });
 
 document.getElementById('btn-unlink-dir').addEventListener('click', async ()=>{
   const ok = await showConfirm('Werkmap ontkoppelen? De bronnenlijst wordt uit de app verwijderd (de bestanden zelf blijven ongewijzigd op je toestel staan).', 'Ontkoppelen');
@@ -4757,6 +4805,7 @@ document.addEventListener('visibilitychange', ()=>{
   if(document.hidden) return;
   vraagSwUpdate();
   checkAppUpdate();
+  kijkExtern();
 });
 /* Een tabblad dat dagen op de voorgrond blijft wisselt nooit van zichtbaarheid en zou
    dus nooit worden gecontroleerd. De afknijping in vraagSwUpdate blijft gelden, dus dit
