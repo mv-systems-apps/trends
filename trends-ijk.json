@@ -1,0 +1,202 @@
+{
+ "dag-3m-x": {
+  "grafiek": "17e732ea2ccf302c",
+  "stats": "c92c4f23bd1701fe",
+  "tabel": "da7bd6d3c472eca1"
+ },
+ "dag-1j-x-week": {
+  "grafiek": "e75baf4c027f2162",
+  "stats": "65f3f940ca1500c6",
+  "tabel": "32eb0e8a73f9313b"
+ },
+ "dag-3m-x-alle-lagen": {
+  "grafiek": "8bdffdbc1b2bb637",
+  "stats": "01151b7de8743cf4",
+  "tabel": "749e6fae0587c7d0"
+ },
+ "dag-3m-xmr": {
+  "grafiek": "22f7b5e66e07928d",
+  "stats": "65840f834c1d3b81",
+  "tabel": "2b45c8cde730a570"
+ },
+ "dag-1j-xmr-week": {
+  "grafiek": "701672d697000e24",
+  "stats": "491184ce20ee950c",
+  "tabel": "36555dd3a3f340e4"
+ },
+ "dag-3m-xmr-alle-lagen": {
+  "grafiek": "e00924786e953018",
+  "stats": "ff16d25f871a0c65",
+  "tabel": "e314e446930d9c42"
+ },
+ "dag-3m-range": {
+  "grafiek": "3d429c8486451f3a",
+  "stats": "39ea01efbaa5f0ab",
+  "tabel": "1c741a3de71e3637"
+ },
+ "dag-1j-range-week": {
+  "grafiek": "5b268ceed18d2893",
+  "stats": "7a845c8693866d5b",
+  "tabel": "73faeeef8d2ee83d"
+ },
+ "dag-3m-range-alle-lagen": {
+  "grafiek": "3d429c8486451f3a",
+  "stats": "39ea01efbaa5f0ab",
+  "tabel": "1c741a3de71e3637"
+ },
+ "dag-3m-regr": {
+  "grafiek": "23ea98d99f4c3051",
+  "stats": "07f0fe4162fcffd8",
+  "tabel": "da7bd6d3c472eca1"
+ },
+ "dag-1j-regr-week": {
+  "grafiek": "bb7d4c3a60935113",
+  "stats": "a644b20d079554df",
+  "tabel": "acf016aeaa46c286"
+ },
+ "dag-3m-regr-alle-lagen": {
+  "grafiek": "2bb2b67f6c1af309",
+  "stats": "d954904c3b1b0e00",
+  "tabel": "da7bd6d3c472eca1"
+ },
+ "dag-3m-regrxmr": {
+  "grafiek": "26034bb6246c03a4",
+  "stats": "e8a959bb04fcbfed",
+  "tabel": "da7bd6d3c472eca1"
+ },
+ "dag-1j-regrxmr-week": {
+  "grafiek": "8441628a6c89d9e3",
+  "stats": "ebd307e57221eaa4",
+  "tabel": "c95580ca2afbce4e"
+ },
+ "dag-3m-regrxmr-alle-lagen": {
+  "grafiek": "cad7203e762c67f5",
+  "stats": "9ffcdc1e80a42857",
+  "tabel": "da7bd6d3c472eca1"
+ },
+ "dag-3m-prog": {
+  "grafiek": "c3d9663fcbbbbcbd",
+  "stats": "eb6211c1da3ca953",
+  "tabel": "136514647b5db229"
+ },
+ "dag-1j-prog-week": {
+  "grafiek": "bb7d4c3a60935113",
+  "stats": "a644b20d079554df",
+  "tabel": "acf016aeaa46c286"
+ },
+ "dag-3m-prog-alle-lagen": {
+  "grafiek": "c3d9663fcbbbbcbd",
+  "stats": "eb6211c1da3ca953",
+  "tabel": "136514647b5db229"
+ },
+ "dag-alles-m": {
+  "grafiek": "2acc7e9cc1430d6c",
+  "stats": "16e031c0fd4cef92",
+  "tabel": "ddc49f5cc7f1b85a"
+ },
+ "dag-alles-q": {
+  "grafiek": "85d65b89752bd94e",
+  "stats": "6dce9664933e1b4d",
+  "tabel": "e6b8865cd9e4e0e2"
+ },
+ "dag-alles-y": {
+  "grafiek": "3f6d7e8aba66afbd",
+  "stats": "a05096b49aee8beb",
+  "tabel": "c5d7cff144a3501e"
+ },
+ "dag-alles-m-regr": {
+  "grafiek": "8dd10a568610a03a",
+  "stats": "e57b647e2c5b3502",
+  "tabel": "58d2d31bfc049fc8"
+ },
+ "dag-6m-grenzen-uit": {
+  "grafiek": "73aa07bff6fe9ab1",
+  "stats": "52a807de5f059ba4",
+  "tabel": "ca7e33450d10313d"
+ },
+ "dag-6m-doel-uit-notities-uit": {
+  "grafiek": "7c99d3eba57f1ad6",
+  "stats": "52a807de5f059ba4",
+  "tabel": "c501ad685d250653"
+ },
+ "dag-1m-gekozen-punt": {
+  "grafiek": "dd9ac052ed12def5",
+  "stats": "98ecd7060d4b57ca",
+  "tabel": "53ef02e1899e57aa"
+ },
+ "dag-9m-run": {
+  "grafiek": "38de5fd9227eb129",
+  "stats": "0ec770059d3daf03",
+  "tabel": "59280e48606cf726"
+ },
+ "dag-1w": {
+  "grafiek": "8a6bf126e8868fe1",
+  "stats": "44b2b2024f442c4c",
+  "tabel": "6af5fcced5eaf4d0"
+ },
+ "dag-1m-gekozen-lege-dag": {
+  "grafiek": "94005ae4680c5424",
+  "stats": "98ecd7060d4b57ca",
+  "tabel": "16f585d2dc84350f"
+ },
+ "dag-1m-regr-gekozen-lege-dag": {
+  "grafiek": "06a49acad96b50ff",
+  "stats": "63e5c9555d3ac300",
+  "tabel": "16f585d2dc84350f"
+ },
+ "dag-1y-zonder-puntjes": {
+  "grafiek": "353663fd82d787ba",
+  "stats": "c0f6e3edc4cadcf5",
+  "tabel": "e478dcdf25146025"
+ },
+ "meer-1m-x-dag": {
+  "grafiek": "9e8ced28de449382",
+  "stats": "a9700f1b5668091a",
+  "tabel": "236c9e556961655f"
+ },
+ "meer-1m-x-tijd": {
+  "grafiek": "8a9eae2d9b1d55ae",
+  "stats": "7a7335d329a6fb4f",
+  "tabel": "1b6ccd113a00f7ee"
+ },
+ "meer-1m-xmr-dag": {
+  "grafiek": "3ee57540670f8e08",
+  "stats": "9297dc70d67e23e6",
+  "tabel": "236c9e556961655f"
+ },
+ "meer-1m-xmr-tijd": {
+  "grafiek": "f23dc8bde7f07f58",
+  "stats": "9297dc70d67e23e6",
+  "tabel": "236c9e556961655f"
+ },
+ "meer-1m-regr-dag": {
+  "grafiek": "7de75d9d0e2d365d",
+  "stats": "5e1932900edb2549",
+  "tabel": "63dba82b92fe6a16"
+ },
+ "meer-1m-regr-tijd": {
+  "grafiek": "f748ae44090931f5",
+  "stats": "579402c602853a9f",
+  "tabel": "1b6ccd113a00f7ee"
+ },
+ "meer-1m-range-tijd": {
+  "grafiek": "68d991e6a2f26f85",
+  "stats": "84723ee460ababcb",
+  "tabel": "472f8694251b6d68"
+ },
+ "meer-1m-regr-tijd-gekozen": {
+  "grafiek": "8ee55824c825eb31",
+  "stats": "579402c602853a9f",
+  "tabel": "ae4426bb74353f50"
+ },
+ "meer-3m-week-alle-lagen": {
+  "grafiek": "7fd1628be844e03f",
+  "stats": "0b7fcd9886ec3bf3",
+  "tabel": "ba8cda777c71acdc"
+ },
+ "meer-1m-uitgeklapt": {
+  "grafiek": "9e8ced28de449382",
+  "stats": "a9700f1b5668091a",
+  "tabel": "7eeacb03bb90e4a1"
+ }
+}
