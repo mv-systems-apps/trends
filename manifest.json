@@ -1,0 +1,48 @@
+{
+  "name": "Trends",
+  "short_name": "Trends",
+  "description": "Trend data analyseren, bewerken en visualiseren als controlekaart.",
+  "start_url": "./trends.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1417",
+  "theme_color": "#0f1417",
+  "lang": "nl",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Meting toevoegen",
+      "short_name": "Meting",
+      "description": "Een meting toevoegen bij de laatst gekozen bron",
+      "url": "./trends.html?snel=meting",
+      "icons": [
+        {
+          "src": "snelkoppelingen/meting.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "snelkoppelingen/meting.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "maskable"
+        }
+      ]
+    }
+  ]
+}
